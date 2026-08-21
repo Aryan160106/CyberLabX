@@ -1,0 +1,45 @@
+﻿name: CyberLabX CI/CD
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'k8s/juiceshop-lab/**'
+
+jobs:
+  lint-and-deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Helm lint
+        run: helm lint k8s/juiceshop-lab
+
+      - name: Deploy Student A
+        run: |
+          helm upgrade --install student-a k8s/juiceshop-lab -n student-a --create-namespace `
+            --set studentId=student-a `
+            --set namespace=student-a `
+            --set nodePort=30001
+
+      - name: Deploy Student B
+        run: |
+          helm upgrade --install student-b k8s/juiceshop-lab -n student-b --create-namespace `
+            --set studentId=student-b `
+            --set namespace=student-b `
+            --set nodePort=30002
+
+      - name: Deploy Student C
+        run: |
+          helm upgrade --install student-c k8s/juiceshop-lab -n student-c --create-namespace `
+            --set studentId=student-c `
+            --set namespace=student-c `
+            --set nodePort=30003
+
+      - name: Verify pods
+        run: |
+          kubectl get pods -n student-a
+          kubectl get pods -n student-b
+          kubectl get pods -n student-c

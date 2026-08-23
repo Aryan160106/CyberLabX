@@ -1,0 +1,32 @@
+﻿apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: lab-cleanup
+  namespace: default
+spec:
+  schedule: "*/2 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: cleanup-sa
+          containers:
+            - name: cleanup
+              image: bitnami/kubectl:latest
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  TTL_MINUTES=10
+                  NOW=$(date +%s)
+                  for ns in $(kubectl get ns -l type=student-lab -o jsonpath='{.items[*].metadata.name}'); do
+                    CREATED=$(kubectl get ns $ns -o jsonpath='{.metadata.creationTimestamp}')
+                    CREATED_EPOCH=$(date -d $CREATED +%s)
+                    AGE_MIN=$(( (NOW - CREATED_EPOCH) / 60 ))
+                    echo "Namespace $ns is $AGE_MIN minutes old"
+                    if [ $AGE_MIN -ge $TTL_MINUTES ]; then
+                      echo "Deleting $ns (exceeded TTL of $TTL_MINUTES min)"
+                      kubectl delete ns $ns
+                    fi
+                  done
+          restartPolicy: OnFailure

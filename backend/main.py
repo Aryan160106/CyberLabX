@@ -103,3 +103,32 @@ def deploy_lab(lab_type: str):
         "node_port": node_port,
         "helm_output": result.stdout,
     }
+
+
+@app.delete("/labs/{namespace}")
+def delete_lab(namespace: str):
+    """Tear down a lab: uninstall its Helm release and delete the namespace"""
+    if not namespace.startswith("lab-"):
+        raise HTTPException(
+            status_code=400,
+            detail="Refusing to delete a namespace not created by this API (must start with 'lab-')"
+        )
+
+    uninstall_result = subprocess.run(
+        ["helm", "uninstall", namespace, "--namespace", namespace],
+        capture_output=True,
+        text=True,
+    )
+
+    ns_delete_error = None
+    try:
+        v1.delete_namespace(name=namespace)
+    except client.exceptions.ApiException as e:
+        ns_delete_error = str(e)
+
+    return {
+        "deleted": True,
+        "namespace": namespace,
+        "helm_uninstall_output": uninstall_result.stdout or uninstall_result.stderr,
+        "namespace_delete_error": ns_delete_error,
+    }

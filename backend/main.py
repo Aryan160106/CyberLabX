@@ -1,4 +1,8 @@
-from fastapi import FastAPI
+﻿import random
+import subprocess
+import uuid
+
+from fastapi import FastAPI, HTTPException
 from kubernetes import client, config
 
 app = FastAPI()
@@ -8,6 +12,14 @@ app = FastAPI()
 config.load_kube_config()
 
 v1 = client.CoreV1Api()
+
+# Path to your Helm chart on disk
+CHART_PATH = r"C:\Users\aryan\CyberlabX\k8s\juiceshop-lab"
+
+# Supported lab types -> which chart to use for each
+SUPPORTED_LABS = {
+    "juice-shop": CHART_PATH,
+}
 
 
 @app.get("/")
@@ -28,13 +40,13 @@ def cluster_health():
 
 @app.get("/labs")
 def list_labs():
-    """List all active labs (namespaces prefixed with 'student-')"""
+    """List all active labs (namespaces prefixed with 'student-' or 'lab-')"""
     namespaces = v1.list_namespace()
     labs = []
 
     for ns in namespaces.items:
         name = ns.metadata.name
-        if not name.startswith("student-"):
+        if not (name.startswith("student-") or name.startswith("lab-")):
             continue
 
         pods = v1.list_namespaced_pod(namespace=name)
@@ -48,3 +60,46 @@ def list_labs():
         })
 
     return {"labs": labs}
+
+
+@app.post("/labs/{lab_type}")
+def deploy_lab(lab_type: str):
+    """Deploy a new lab of the given type into a freshly created namespace"""
+    if lab_type not in SUPPORTED_LABS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown lab_type '{lab_type}'. Supported: {list(SUPPORTED_LABS.keys())}"
+        )
+
+    chart_path = SUPPORTED_LABS[lab_type]
+    suffix = uuid.uuid4().hex[:6]
+    namespace = f"lab-{lab_type}-{suffix}"
+    release_name = namespace
+    node_port = random.randint(30010, 32767)
+
+    result = subprocess.run(
+        [
+            "helm", "install", release_name, chart_path,
+            "--namespace", namespace,
+            "--create-namespace",
+            "--set", f"namespace={namespace}",
+            "--set", f"studentId={namespace}",
+            "--set", f"nodePort={node_port}",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Helm install failed: {result.stderr}"
+        )
+
+    return {
+        "deployed": True,
+        "namespace": namespace,
+        "release": release_name,
+        "node_port": node_port,
+        "helm_output": result.stdout,
+    }

@@ -1,11 +1,19 @@
-﻿import random
-import subprocess
+﻿import subprocess
 import uuid
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from kubernetes import client, config
 
 app = FastAPI()
+
+# Allow the frontend (running on Vite's dev server) to call this API from the browser
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Load kubeconfig from the default location (~/.kube/config)
 # This is the same config kubectl/helm already use on this machine
@@ -13,12 +21,16 @@ config.load_kube_config()
 
 v1 = client.CoreV1Api()
 
-# Path to your Helm chart on disk
-CHART_PATH = r"C:\Users\aryan\CyberlabX\k8s\juiceshop-lab"
+# Path to your Helm charts on disk
+JUICE_SHOP_CHART = r"C:\Users\aryan\CyberlabX\k8s\juiceshop-lab"
+DVWA_CHART = r"C:\Users\aryan\CyberlabX\k8s\dvwa-lab"
+METASPLOITABLE_CHART = r"C:\Users\aryan\CyberlabX\k8s\metasploitable-lab"
 
 # Supported lab types -> which chart to use for each
 SUPPORTED_LABS = {
-    "juice-shop": CHART_PATH,
+    "juice-shop": JUICE_SHOP_CHART,
+    "dvwa": DVWA_CHART,
+    "metasploitable": METASPLOITABLE_CHART,
 }
 
 
@@ -38,6 +50,23 @@ def cluster_health():
     }
 
 
+def _infer_lab_type(namespace: str) -> str:
+    """Guess the lab type from a namespace like 'lab-juice-shop-2fd28c'"""
+    for lab_type in SUPPORTED_LABS:
+        if namespace.startswith(f"lab-{lab_type}-"):
+            return lab_type
+    return "unknown"
+
+
+def _lab_url(namespace: str) -> str:
+    """Build the Ingress-based URL for a lab, using nip.io for wildcard DNS
+    so every dynamically-named namespace resolves back to localhost without
+    needing /etc/hosts entries. Requires:
+        kubectl port-forward -n ingress-nginx svc/ingress-nginx-controller 8080:80
+    to be running."""
+    return f"http://{namespace}.127.0.0.1.nip.io:8080"
+
+
 @app.get("/labs")
 def list_labs():
     """List all active labs (namespaces prefixed with 'student-' or 'lab-')"""
@@ -54,9 +83,11 @@ def list_labs():
 
         labs.append({
             "namespace": name,
+            "lab_type": _infer_lab_type(name) if name.startswith("lab-") else "student",
             "created": ns.metadata.creation_timestamp.isoformat() if ns.metadata.creation_timestamp else None,
             "pod_count": len(pods.items),
             "pod_statuses": pod_statuses,
+            "lab_url": _lab_url(name),
         })
 
     return {"labs": labs}
@@ -75,7 +106,6 @@ def deploy_lab(lab_type: str):
     suffix = uuid.uuid4().hex[:6]
     namespace = f"lab-{lab_type}-{suffix}"
     release_name = namespace
-    node_port = random.randint(30010, 32767)
 
     result = subprocess.run(
         [
@@ -84,7 +114,6 @@ def deploy_lab(lab_type: str):
             "--create-namespace",
             "--set", f"namespace={namespace}",
             "--set", f"studentId={namespace}",
-            "--set", f"nodePort={node_port}",
         ],
         capture_output=True,
         text=True,
@@ -100,7 +129,7 @@ def deploy_lab(lab_type: str):
         "deployed": True,
         "namespace": namespace,
         "release": release_name,
-        "node_port": node_port,
+        "lab_url": _lab_url(namespace),
         "helm_output": result.stdout,
     }
 

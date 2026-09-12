@@ -1,0 +1,10 @@
+{
+  "description": "Launch and manage isolated, disposable vulnerable-app labs for hands-on cybersecurity training with real-time monitoring and resource controls.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

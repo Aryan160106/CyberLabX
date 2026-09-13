@@ -1,4 +1,5 @@
-﻿import subprocess
+import os
+import subprocess
 import uuid
 
 from fastapi import FastAPI, HTTPException
@@ -15,16 +16,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Load kubeconfig from the default location (~/.kube/config)
-# This is the same config kubectl/helm already use on this machine
-config.load_kube_config()
+# When running as a Pod inside the cluster, use the ServiceAccount token Kubernetes
+# mounts automatically (in-cluster config). Fall back to the local ~/.kube/config
+# only for running main.py directly on a laptop during quick local debugging.
+try:
+    config.load_incluster_config()
+except config.ConfigException:
+    config.load_kube_config()
 
 v1 = client.CoreV1Api()
 
-# Path to your Helm charts on disk
-JUICE_SHOP_CHART = r"C:\Users\aryan\CyberlabX\k8s\juiceshop-lab"
-DVWA_CHART = r"C:\Users\aryan\CyberlabX\k8s\dvwa-lab"
-METASPLOITABLE_CHART = r"C:\Users\aryan\CyberlabX\k8s\metasploitable-lab"
+# Chart paths are relative to this file, matching the Dockerfile's `COPY k8s/ ./charts/`.
+# This replaces the old hardcoded Windows paths, which only ever worked on one laptop.
+CHARTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "charts")
+JUICE_SHOP_CHART = os.path.join(CHARTS_DIR, "juiceshop-lab")
+DVWA_CHART = os.path.join(CHARTS_DIR, "dvwa-lab")                       # chart not built yet
+METASPLOITABLE_CHART = os.path.join(CHARTS_DIR, "metasploitable-lab")   # chart not built yet
 
 # Supported lab types -> which chart to use for each
 SUPPORTED_LABS = {
@@ -64,6 +71,10 @@ def _lab_url(namespace: str) -> str:
     needing /etc/hosts entries. Requires:
         kubectl port-forward -n ingress-nginx svc/ingress-nginx-controller 8080:80
     to be running."""
+    # NOTE: this still assumes the manual port-forward tunnel. We're replacing that
+    # with a kind-config.yaml port mapping in a later step, at which point this
+    # becomes just f"http://{namespace}.127.0.0.1.nip.io" with no port and no
+    # manual port-forward needed at all. Leaving as-is until that step.
     return f"http://{namespace}.127.0.0.1.nip.io:8080"
 
 

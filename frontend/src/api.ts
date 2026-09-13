@@ -1,5 +1,9 @@
-// ─── API client for the CyberLabX FastAPI backend ─────────────────────────────
-const API_BASE = "http://127.0.0.1:8000";
+// ??? API client for the CyberLabX FastAPI backend ?????????????????????????????
+// Relative path, not a hardcoded host/port. The Ingress (set up in a later step)
+// routes anything under /api on this same origin to the backend Service. This is
+// what makes the URL work identically whether you're on Kind, a real cluster,
+// or a different laptop entirely ? nothing here assumes localhost:8000 anymore.
+const API_BASE = "/api";
 
 export interface BackendLab {
   namespace: string;

@@ -1,12 +1,23 @@
 import os
 import subprocess
 import uuid
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from kubernetes import client, config
+from sqlalchemy import text
 
-app = FastAPI()
+from db import engine, init_db
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()  # creates the tables if they don't exist yet
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 # Allow the frontend (running on Vite's dev server) to call this API from the browser
 app.add_middleware(
@@ -57,6 +68,14 @@ def cluster_health():
     }
 
 
+@app.get("/health/db")
+def db_health():
+    """Quick sanity check: can we actually talk to PostgreSQL?"""
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
+    return {"connected": True}
+
+
 def _infer_lab_type(namespace: str) -> str:
     """Guess the lab type from a namespace like 'lab-juice-shop-2fd28c'"""
     for lab_type in SUPPORTED_LABS:
@@ -68,14 +87,10 @@ def _infer_lab_type(namespace: str) -> str:
 def _lab_url(namespace: str) -> str:
     """Build the Ingress-based URL for a lab, using nip.io for wildcard DNS
     so every dynamically-named namespace resolves back to localhost without
-    needing /etc/hosts entries. Requires:
-        kubectl port-forward -n ingress-nginx svc/ingress-nginx-controller 8080:80
-    to be running."""
-    # NOTE: this still assumes the manual port-forward tunnel. We're replacing that
-    # with a kind-config.yaml port mapping in a later step, at which point this
-    # becomes just f"http://{namespace}.127.0.0.1.nip.io" with no port and no
-    # manual port-forward needed at all. Leaving as-is until that step.
-    return f"http://{namespace}.127.0.0.1.nip.io:8080"
+    needing /etc/hosts entries. Docker Desktop auto-maps the ingress-nginx
+    LoadBalancer service straight to localhost:80, so no port-forward or
+    port suffix is needed."""
+    return f"http://{namespace}.127.0.0.1.nip.io"
 
 
 @app.get("/labs")

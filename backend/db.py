@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Uuid, create_engine
 from sqlalchemy.engine import URL
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 DATABASE_URL = URL.create(
     "postgresql+psycopg",
@@ -15,6 +15,16 @@ DATABASE_URL = URL.create(
     database=os.environ.get("DB_NAME", "cyberlabx"),
 )
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+
+
+def get_db():
+    """FastAPI dependency: one DB session per request."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 def _now() -> datetime:

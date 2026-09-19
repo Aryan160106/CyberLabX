@@ -9,6 +9,7 @@ from kubernetes import client, config
 from sqlalchemy import text
 
 from db import engine, init_db
+from auth import router as auth_router
 
 
 @asynccontextmanager
@@ -18,6 +19,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.include_router(auth_router)
 
 # Allow the frontend (running on Vite's dev server) to call this API from the browser
 app.add_middleware(

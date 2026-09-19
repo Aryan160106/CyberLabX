@@ -26,6 +26,11 @@ spec:
                 secretKeyRef:
                   name: cyberlabx-db
                   key: password
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: cyberlabx-auth
+                  key: jwt-secret
           readinessProbe:
             httpGet:
               path: /

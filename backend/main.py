@@ -2,14 +2,16 @@ import os
 import subprocess
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from kubernetes import client, config
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
-from db import engine, init_db
-from auth import router as auth_router
+from db import engine, init_db, get_db, LabSession, User
+from auth import router as auth_router, get_current_user
 
 
 @asynccontextmanager
@@ -40,7 +42,6 @@ except config.ConfigException:
 v1 = client.CoreV1Api()
 
 # Chart paths are relative to this file, matching the Dockerfile's `COPY k8s/ ./charts/`.
-# This replaces the old hardcoded Windows paths, which only ever worked on one laptop.
 CHARTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "charts")
 JUICE_SHOP_CHART = os.path.join(CHARTS_DIR, "juiceshop-lab")
 DVWA_CHART = os.path.join(CHARTS_DIR, "dvwa-lab")                       # chart not built yet
@@ -52,6 +53,8 @@ SUPPORTED_LABS = {
     "dvwa": DVWA_CHART,
     "metasploitable": METASPLOITABLE_CHART,
 }
+
+LAB_TTL_MINUTES = 60  # how long a lab runs before it's considered expired
 
 
 @app.get("/")
@@ -95,6 +98,21 @@ def _lab_url(namespace: str) -> str:
     return f"http://{namespace}.127.0.0.1.nip.io"
 
 
+def _expire_stale_sessions(db: Session, user: User) -> None:
+    """Mark this user's sessions as ended once their TTL has passed
+    (the cleanup CronJob has already removed the namespace by then)."""
+    now = datetime.now(timezone.utc)
+    stale = db.query(LabSession).filter(
+        LabSession.user_id == user.id,
+        LabSession.ended_at.is_(None),
+        LabSession.expires_at < now,
+    ).all()
+    for s in stale:
+        s.ended_at = now
+    if stale:
+        db.commit()
+
+
 @app.get("/labs")
 def list_labs():
     """List all active labs (namespaces prefixed with 'student-' or 'lab-')"""
@@ -121,13 +139,54 @@ def list_labs():
     return {"labs": labs}
 
 
+@app.get("/labs/me")
+def my_lab(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return the current user's active lab, if any."""
+    _expire_stale_sessions(db, user)
+    active = db.query(LabSession).filter(
+        LabSession.user_id == user.id,
+        LabSession.ended_at.is_(None),
+    ).first()
+    if not active:
+        return {"active": False}
+    return {
+        "active": True,
+        "lab_type": active.lab_type,
+        "namespace": active.namespace,
+        "lab_url": _lab_url(active.namespace),
+        "created_at": active.created_at.isoformat(),
+        "expires_at": active.expires_at.isoformat() if active.expires_at else None,
+    }
+
+
 @app.post("/labs/{lab_type}")
-def deploy_lab(lab_type: str):
+def deploy_lab(
+    lab_type: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Deploy a new lab of the given type into a freshly created namespace"""
     if lab_type not in SUPPORTED_LABS:
         raise HTTPException(
             status_code=400,
             detail=f"Unknown lab_type '{lab_type}'. Supported: {list(SUPPORTED_LABS.keys())}"
+        )
+
+    # Clear out any of this user's labs whose TTL has already passed
+    _expire_stale_sessions(db, user)
+
+    # Block if this user already has an active lab
+    active = db.query(LabSession).filter(
+        LabSession.user_id == user.id,
+        LabSession.ended_at.is_(None),
+    ).first()
+    if active:
+        raise HTTPException(
+            status_code=409,
+            detail=f"You already have an active lab ({active.namespace}). End it before starting a new one."
         )
 
     chart_path = SUPPORTED_LABS[lab_type]
@@ -153,6 +212,16 @@ def deploy_lab(lab_type: str):
             detail=f"Helm install failed: {result.stderr}"
         )
 
+    # Record this lab in the database
+    session = LabSession(
+        user_id=user.id,
+        lab_type=lab_type,
+        namespace=namespace,
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=LAB_TTL_MINUTES),
+    )
+    db.add(session)
+    db.commit()
+
     return {
         "deployed": True,
         "namespace": namespace,
@@ -163,12 +232,22 @@ def deploy_lab(lab_type: str):
 
 
 @app.delete("/labs/{namespace}")
-def delete_lab(namespace: str):
-    """Tear down a lab: uninstall its Helm release and delete the namespace"""
-    if not namespace.startswith("lab-"):
+def delete_lab(
+    namespace: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """End the current user's own active lab: uninstall its Helm release,
+    delete the namespace, and mark the session as ended."""
+    session = db.query(LabSession).filter(
+        LabSession.namespace == namespace,
+        LabSession.user_id == user.id,
+        LabSession.ended_at.is_(None),
+    ).first()
+    if not session:
         raise HTTPException(
-            status_code=400,
-            detail="Refusing to delete a namespace not created by this API (must start with 'lab-')"
+            status_code=404,
+            detail="No active lab with that namespace on your account"
         )
 
     uninstall_result = subprocess.run(
@@ -182,6 +261,9 @@ def delete_lab(namespace: str):
         v1.delete_namespace(name=namespace)
     except client.exceptions.ApiException as e:
         ns_delete_error = str(e)
+
+    session.ended_at = datetime.now(timezone.utc)
+    db.commit()
 
     return {
         "deleted": True,

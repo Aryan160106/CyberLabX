@@ -1,18 +1,19 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import 'tailwindcss';
 
+/* CyberLabX theme: near-black with a single lime accent. */
 @theme {
-  --color-bg: #060b14;
-  --color-surface: #0b1220;
-  --color-card: #0f1a2b;
-  --color-line: #1b2a44;
-  --color-brand: #2f81f7;
-  --color-cyan: #38bdf8;
-  --color-ok: #2ee6a6;
+  --color-bg: #080b0e;
+  --color-surface: #0b0f12;
+  --color-card: #10161a;
+  --color-line: #20272d;
+  --color-brand: #b7f34a;
+  --color-cyan: #b7f34a;
+  --color-ok: #b7f34a;
   --color-warn: #f5a524;
-  --color-danger: #f0506e;
-  --color-ink: #e6edf7;
-  --color-dim: #7d8fa9;
+  --color-danger: #ff6b6b;
+  --color-ink: #e7edf2;
+  --color-dim: #7f8b94;
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }

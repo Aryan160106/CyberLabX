@@ -1,4 +1,4 @@
-﻿import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { ArrowRight, BookOpen, Flag, Terminal, TrendingUp } from "lucide-react";
 import { useAuth } from "../auth";
 import { Logo } from "../components/Logo";
@@ -55,7 +55,7 @@ export default function Landing() {
             </Link>
             <Link
               to="/signup"
-              className="rounded-md bg-brand px-3 py-1.5 font-medium text-white hover:opacity-90"
+              className="rounded-md bg-brand px-3 py-1.5 font-semibold text-bg hover:opacity-90"
             >
               Sign up
             </Link>
@@ -75,7 +75,7 @@ export default function Landing() {
       >
         <div className="mx-auto grid max-w-6xl gap-10 bg-bg/80 px-4 py-16 lg:grid-cols-2 lg:items-center lg:py-24">
           <div>
-            <p className="mb-3 font-mono text-xs uppercase tracking-widest text-cyan">
+            <p className="mb-3 font-mono text-xs uppercase tracking-widest text-brand">
               Hands-on cybersecurity training
             </p>
             <h1 className="text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
@@ -88,7 +88,7 @@ export default function Landing() {
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link
                 to="/signup"
-                className="inline-flex items-center gap-2 rounded-md bg-brand px-4 py-2.5 text-sm font-medium text-white hover:opacity-90"
+                className="inline-flex items-center gap-2 rounded-md bg-brand px-4 py-2.5 text-sm font-semibold text-bg hover:opacity-90"
               >
                 Start practicing <ArrowRight className="size-4" />
               </Link>
@@ -150,7 +150,7 @@ export default function Landing() {
             {labs.map((lab) => (
               <div key={lab.name} className="rounded-lg border border-line bg-card p-5">
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs text-cyan">{lab.tag}</span>
+                  <span className="font-mono text-xs uppercase tracking-wider text-dim">{lab.tag}</span>
                   <span
                     className={
                       "inline-flex items-center gap-1.5 font-mono text-xs " +
@@ -175,7 +175,7 @@ export default function Landing() {
         <p className="mt-2 text-sm text-dim">Create an account and launch Juice Shop in a few clicks.</p>
         <Link
           to="/signup"
-          className="mt-6 inline-flex items-center gap-2 rounded-md bg-brand px-4 py-2.5 text-sm font-medium text-white hover:opacity-90"
+          className="mt-6 inline-flex items-center gap-2 rounded-md bg-brand px-4 py-2.5 text-sm font-semibold text-bg hover:opacity-90"
         >
           Create free account <ArrowRight className="size-4" />
         </Link>
@@ -187,5 +187,3 @@ export default function Landing() {
     </div>
   );
 }
-
-

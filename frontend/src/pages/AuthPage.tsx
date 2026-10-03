@@ -100,7 +100,7 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
           <button
             type="submit"
             disabled={busy}
-            className="w-full rounded-md bg-brand py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            className="w-full rounded-md bg-brand py-2 text-sm font-semibold text-bg hover:opacity-90 disabled:opacity-50"
           >
             {busy ? "Please wait…" : isSignup ? "Sign up" : "Log in"}
           </button>

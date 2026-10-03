@@ -1,10 +1,16 @@
-﻿import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { RequireAuth } from "./auth";
 import AppLayout from "./components/AppLayout";
 import AuthPage from "./pages/AuthPage";
-import ComingSoon from "./pages/ComingSoon";
 import Dashboard from "./pages/Dashboard";
+import LabDetail from "./pages/LabDetail";
+import Labs from "./pages/Labs";
 import Landing from "./pages/Landing";
+import Learning from "./pages/Learning";
+import PracticeLab from "./pages/PracticeLab";
+import Progress from "./pages/Progress";
+import Quiz from "./pages/Quiz";
+import Settings from "./pages/Settings";
 
 export default function App() {
   return (
@@ -16,12 +22,14 @@ export default function App() {
       <Route element={<RequireAuth />}>
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/labs" element={<ComingSoon title="Labs" sprint="Sprint 8.6" />} />
-          <Route path="/learning" element={<ComingSoon title="Learning" sprint="Sprint 9" />} />
-          <Route path="/missions" element={<ComingSoon title="Missions" sprint="Sprint 10" />} />
-          <Route path="/leaderboard" element={<ComingSoon title="Leaderboard" sprint="Sprint 11" />} />
-          <Route path="/progress" element={<ComingSoon title="Progress" sprint="Sprint 11" />} />
-          <Route path="/profile" element={<ComingSoon title="Profile" sprint="Sprint 11" />} />
+          <Route path="/labs" element={<Labs />} />
+          <Route path="/labs/:labId" element={<LabDetail />} />
+          <Route path="/labs/:labId/learning" element={<Learning />} />
+          <Route path="/labs/:labId/quiz" element={<Quiz />} />
+          <Route path="/labs/:labId/practice" element={<PracticeLab />} />
+          <Route path="/learning" element={<Learning />} />
+          <Route path="/progress" element={<Progress />} />
+          <Route path="/settings" element={<Settings />} />
         </Route>
       </Route>
 

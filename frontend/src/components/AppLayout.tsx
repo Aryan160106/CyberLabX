@@ -1,81 +1,112 @@
-import { NavLink, Outlet } from "react-router-dom";
 import {
-  Activity,
   BookOpen,
   FlaskConical,
   LayoutDashboard,
   LogOut,
-  Target,
+  Settings as SettingsIcon,
   Trophy,
-  User,
 } from "lucide-react";
-import { useAuth } from "../auth";
-import { Logo } from "./Logo";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 
-const NAV = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/labs", label: "Labs", icon: FlaskConical },
-  { to: "/learning", label: "Learning", icon: BookOpen },
-  { to: "/missions", label: "Missions", icon: Target },
-  { to: "/leaderboard", label: "Leaderboard", icon: Trophy },
-  { to: "/progress", label: "Progress", icon: Activity },
-  { to: "/profile", label: "Profile", icon: User },
-];
+import { useAuth } from "../auth";
+
+import "../App.css";
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
+  const { pathname } = useLocation();
+
+  // Lab sub-pages (/labs/:id/...) have their own header, so hide the topbar.
+  const hideTopbar = /^\/labs\/.+/.test(pathname);
+  const initials = (user?.display_name ?? "ST").trim().slice(0, 2).toUpperCase();
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row">
-      <aside className="border-b border-line bg-surface md:w-56 md:shrink-0 md:border-b-0 md:border-r flex flex-col">
-        <div className="p-4">
-          <Logo />
+    <div className="app">
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-mark">CX</div>
+          <div>
+            <h1>CyberLabX</h1>
+            <span>CYBER TRAINING PLATFORM</span>
+          </div>
         </div>
 
-        <nav className="flex md:flex-col gap-1 overflow-x-auto px-2 pb-2 md:flex-1">
-          {NAV.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) =>
-                `flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm transition-colors ${
-                  isActive
-                    ? "bg-brand/15 text-brand"
-                    : "text-dim hover:bg-card hover:text-ink"
-                }`
-              }
-            >
-              <Icon className="size-4" />
-              {label}
-            </NavLink>
-          ))}
+        <nav className="navigation">
+          <p className="nav-label">WORKSPACE</p>
+
+          <NavLink to="/dashboard" className="nav-item">
+            <LayoutDashboard size={18} />
+            Dashboard
+          </NavLink>
+          <NavLink to="/labs" className="nav-item">
+            <FlaskConical size={18} />
+            Labs
+          </NavLink>
+          <NavLink to="/learning" className="nav-item">
+            <BookOpen size={18} />
+            Learning
+          </NavLink>
+          <NavLink to="/progress" className="nav-item">
+            <Trophy size={18} />
+            Progress
+          </NavLink>
+
+          <p className="nav-label system-label">SYSTEM</p>
+
+          <NavLink to="/settings" className="nav-item">
+            <SettingsIcon size={18} />
+            Settings
+          </NavLink>
         </nav>
 
-        <div className="hidden md:flex items-center justify-between gap-2 border-t border-line p-3">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{user?.display_name}</p>
-            <p className="font-mono text-xs text-dim">{user?.xp.toLocaleString()} XP</p>
+        <div className="sidebar-user">
+          <div>
+            <strong>{user?.display_name}</strong>
+            <span>{user?.xp.toLocaleString()} XP</span>
           </div>
           <button
-            onClick={logout}
+            type="button"
+            className="logout-button"
             title="Log out"
-            className="rounded-md p-2 text-dim hover:bg-card hover:text-danger"
+            onClick={logout}
           >
-            <LogOut className="size-4" />
+            <LogOut size={15} />
           </button>
+        </div>
+
+        <div className="sidebar-status">
+          <span className="status-dot" /> Platform operational
         </div>
       </aside>
 
-      <main className="flex-1 p-5 md:p-8">
-        <div className="mb-4 flex justify-end md:hidden">
-          <button
-            onClick={logout}
-            className="flex items-center gap-1 text-xs text-dim hover:text-danger"
-          >
-            <LogOut className="size-3.5" /> Log out
-          </button>
-        </div>
-        <Outlet />
+      <main className="main">
+        {!hideTopbar && (
+          <header className="topbar">
+            <div>
+              <span className="eyebrow">STUDENT CONSOLE</span>
+              <h2>CyberLabX</h2>
+            </div>
+
+            <div className="topbar-right">
+              <div className="system-status">
+                <span className="status-dot" />
+                Systems operational
+              </div>
+
+              <div className="profile">
+                <div className="avatar">{initials}</div>
+                <div>
+                  <strong>{user?.display_name}</strong>
+                  <span>{user?.xp.toLocaleString()} XP</span>
+                </div>
+              </div>
+            </div>
+          </header>
+        )}
+
+        <section className="content">
+          <Outlet />
+        </section>
       </main>
     </div>
   );

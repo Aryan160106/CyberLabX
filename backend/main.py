@@ -17,6 +17,7 @@ from auth import router as auth_router, get_current_user
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()  # creates the tables if they don't exist yet
+    _start_reaper()
     yield
 
 
@@ -54,7 +55,7 @@ SUPPORTED_LABS = {
     "metasploitable": METASPLOITABLE_CHART,
 }
 
-LAB_TTL_MINUTES = 60  # how long a lab runs before it's considered expired
+LAB_TTL_MINUTES = int(os.getenv("LAB_TTL_MINUTES", "60"))  # how long a lab runs before it's considered expired
 
 
 @app.get("/")
@@ -136,6 +137,19 @@ def list_labs():
     return {"labs": labs}
 
 
+def _lab_ready(namespace: str) -> bool:
+    """True once every pod in the lab namespace is Running and Ready."""
+    try:
+        pods = v1.list_namespaced_pod(namespace=namespace).items
+    except client.exceptions.ApiException:
+        return False
+    return bool(pods) and all(
+        p.status.phase == "Running"
+        and p.status.container_statuses
+        and all(c.ready for c in p.status.container_statuses)
+        for p in pods
+    )
+
 @app.get("/labs/me")
 def my_lab(
     user: User = Depends(get_current_user),
@@ -156,6 +170,7 @@ def my_lab(
         "lab_url": _lab_url(active.namespace),
         "created_at": active.created_at.isoformat(),
         "expires_at": active.expires_at.isoformat() if active.expires_at else None,
+        "ready": _lab_ready(active.namespace),
     }
 
 
@@ -268,3 +283,48 @@ def delete_lab(
         "helm_uninstall_output": uninstall_result.stdout or uninstall_result.stderr,
         "namespace_delete_error": ns_delete_error,
     }
+
+
+# ---- Expiry reaper: the database is the source of truth for lab lifetime ----
+def _reap_expired_labs() -> None:
+    """End every lab whose expires_at has passed: helm uninstall, delete the
+    namespace, mark the session ended. Failed deletions retry next cycle."""
+    now = datetime.now(timezone.utc)
+    gen = get_db()
+    db = next(gen)
+    try:
+        expired = db.query(LabSession).filter(
+            LabSession.ended_at.is_(None),
+            LabSession.expires_at < now,
+        ).all()
+        for s in expired:
+            subprocess.run(
+                ["helm", "uninstall", s.namespace, "--namespace", s.namespace],
+                capture_output=True, text=True,
+            )
+            try:
+                v1.delete_namespace(name=s.namespace)
+            except client.exceptions.ApiException as e:
+                if e.status != 404:  # 404 = already gone, fine
+                    print(f"[reaper] could not delete {s.namespace}: {e.status}", flush=True)
+                    continue
+            s.ended_at = now
+            print(f"[reaper] ended expired lab {s.namespace}", flush=True)
+        if expired:
+            db.commit()
+    finally:
+        gen.close()
+
+
+def _start_reaper(interval_seconds: int = 60) -> None:
+    import threading, time
+
+    def loop():
+        while True:
+            try:
+                _reap_expired_labs()
+            except Exception as e:
+                print(f"[reaper] error: {e}", flush=True)
+            time.sleep(interval_seconds)
+
+    threading.Thread(target=loop, daemon=True, name="lab-reaper").start()

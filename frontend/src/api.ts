@@ -100,3 +100,15 @@ export const deployLab = (labType: string) =>
 
 export const deleteLab = (namespace: string) =>
   request<DeleteResponse>(`/labs/${namespace}`, { method: "DELETE" });
+// ---- Current user's own lab (Sprint 8.6) ----
+export interface MyLab {
+  active: boolean;
+  lab_type?: string;
+  namespace?: string;
+  lab_url?: string;
+  created_at?: string;
+  expires_at?: string | null;
+  ready?: boolean;
+}
+
+export const fetchMyLab = () => request<MyLab>("/labs/me");

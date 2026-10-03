@@ -92,8 +92,7 @@ export const login = (email: string, password: string) =>
 
 export const fetchMe = () => request<User>("/auth/me");
 
-// ---- Labs (still unauthenticated on the backend until Sprint 8.6) ----
-export const fetchLabs = async () => (await request<{ labs: BackendLab[] }>("/labs")).labs;
+// ---- Labs ----
 
 export const deployLab = (labType: string) =>
   request<DeployResponse>(`/labs/${labType}`, { method: "POST" });

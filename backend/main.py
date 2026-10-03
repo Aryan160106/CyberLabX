@@ -126,45 +126,6 @@ def _expire_stale_sessions(db: Session, user: User) -> None:
     if stale:
         db.commit()
 
-@app.get("/labs")
-def list_labs():
-    """List all active labs (namespaces prefixed with 'student-' or 'lab-')"""
-    namespaces = v1.list_namespace()
-    labs = []
-
-    for ns in namespaces.items:
-        name = ns.metadata.name
-        if not (name.startswith("student-") or name.startswith("lab-")):
-            continue
-
-        pods = v1.list_namespaced_pod(namespace=name)
-        pod_statuses = [pod.status.phase for pod in pods.items]
-
-        labs.append({
-            "namespace": name,
-            "lab_type": _infer_lab_type(name) if name.startswith("lab-") else "student",
-            "created": ns.metadata.creation_timestamp.isoformat() if ns.metadata.creation_timestamp else None,
-            "pod_count": len(pods.items),
-            "pod_statuses": pod_statuses,
-            "lab_url": _lab_url(name),
-        })
-
-    return {"labs": labs}
-
-
-def _lab_ready(namespace: str) -> bool:
-    """True once every pod in the lab namespace is Running and Ready."""
-    try:
-        pods = v1.list_namespaced_pod(namespace=namespace).items
-    except client.exceptions.ApiException:
-        return False
-    return bool(pods) and all(
-        p.status.phase == "Running"
-        and p.status.container_statuses
-        and all(c.ready for c in p.status.container_statuses)
-        for p in pods
-    )
-
 @app.get("/labs/me")
 def my_lab(
     user: User = Depends(get_current_user),

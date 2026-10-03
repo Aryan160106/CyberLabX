@@ -90,12 +90,9 @@ def _infer_lab_type(namespace: str) -> str:
 
 
 def _lab_url(namespace: str) -> str:
-    """Build the Ingress-based URL for a lab, using nip.io for wildcard DNS
-    so every dynamically-named namespace resolves back to localhost without
-    needing /etc/hosts entries. Docker Desktop auto-maps the ingress-nginx
-    LoadBalancer service straight to localhost:80, so no port-forward or
-    port suffix is needed."""
-    return f"http://{namespace}.127.0.0.1.nip.io"
+    """Lab URL via ingress-nginx, which kind maps to host port 8080.
+    nip.io resolves <namespace>.127.0.0.1.nip.io back to localhost."""
+    return f"http://{namespace}.127.0.0.1.nip.io:8080"
 
 
 def _expire_stale_sessions(db: Session, user: User) -> None:

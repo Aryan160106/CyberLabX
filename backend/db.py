@@ -1,3 +1,5 @@
+import time
+from sqlalchemy.exc import OperationalError
 import os
 import uuid
 from datetime import datetime, timezone
@@ -56,5 +58,14 @@ class LabSession(Base):
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     flag: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
-def init_db() -> None:
-    Base.metadata.create_all(engine)
+def init_db(retries: int = 30, delay: float = 2.0) -> None:
+    """Create tables, waiting up to ~60s for Postgres to accept connections."""
+    for attempt in range(1, retries + 1):
+        try:
+            Base.metadata.create_all(engine)
+            return
+        except OperationalError:
+            if attempt == retries:
+                raise
+            print(f"[db] Postgres not ready ({attempt}/{retries}), retrying in {delay}s", flush=True)
+            time.sleep(delay)

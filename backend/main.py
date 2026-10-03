@@ -96,9 +96,24 @@ def _lab_url(namespace: str) -> str:
     return f"http://{namespace}.127.0.0.1.nip.io:8080"
 
 
+def _teardown_namespace(namespace: str) -> bool:
+    """Helm uninstall + delete namespace. True if the lab is gone (404 counts)."""
+    subprocess.run(
+        ["helm", "uninstall", namespace, "--namespace", namespace],
+        capture_output=True, text=True,
+    )
+    try:
+        v1.delete_namespace(name=namespace)
+    except client.exceptions.ApiException as e:
+        if e.status != 404:
+            print(f"[teardown] could not delete {namespace}: {e.status}", flush=True)
+            return False
+    return True
+
+
 def _expire_stale_sessions(db: Session, user: User) -> None:
-    """Mark this user's sessions as ended once their TTL has passed
-    (the cleanup CronJob has already removed the namespace by then)."""
+    """Tear down this user's expired labs, then mark them ended.
+    A session is only marked ended once its namespace is really gone."""
     now = datetime.now(timezone.utc)
     stale = db.query(LabSession).filter(
         LabSession.user_id == user.id,
@@ -106,10 +121,10 @@ def _expire_stale_sessions(db: Session, user: User) -> None:
         LabSession.expires_at < now,
     ).all()
     for s in stale:
-        s.ended_at = now
+        if _teardown_namespace(s.namespace):
+            s.ended_at = now
     if stale:
         db.commit()
-
 
 @app.get("/labs")
 def list_labs():

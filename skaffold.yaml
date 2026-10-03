@@ -1,0 +1,19 @@
+apiVersion: skaffold/v4beta11
+kind: Config
+metadata:
+  name: cyberlabx
+build:
+  artifacts:
+    - image: cyberlabx-backend
+      context: .
+      docker:
+        dockerfile: backend/Dockerfile
+    - image: cyberlabx-frontend
+      context: frontend
+manifests:
+  rawYaml:
+    - k8s/backend-rbac.yaml
+    - k8s/dashboard/backend.yaml
+    - k8s/dashboard/frontend.yaml
+    - k8s/dashboard/ingress.yaml
+    - k8s/postgres/postgres.yaml

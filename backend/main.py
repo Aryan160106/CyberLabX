@@ -1,12 +1,28 @@
 import os
 import subprocess
 import uuid
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from kubernetes import client, config
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
-app = FastAPI()
+from db import engine, init_db, get_db, LabSession, User
+from auth import router as auth_router, get_current_user
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()  # creates the tables if they don't exist yet
+    _start_reaper()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
+app.include_router(auth_router)
 
 # Allow the frontend (running on Vite's dev server) to call this API from the browser
 app.add_middleware(
@@ -27,7 +43,6 @@ except config.ConfigException:
 v1 = client.CoreV1Api()
 
 # Chart paths are relative to this file, matching the Dockerfile's `COPY k8s/ ./charts/`.
-# This replaces the old hardcoded Windows paths, which only ever worked on one laptop.
 CHARTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "charts")
 JUICE_SHOP_CHART = os.path.join(CHARTS_DIR, "juiceshop-lab")
 DVWA_CHART = os.path.join(CHARTS_DIR, "dvwa-lab")                       # chart not built yet
@@ -39,6 +54,8 @@ SUPPORTED_LABS = {
     "dvwa": DVWA_CHART,
     "metasploitable": METASPLOITABLE_CHART,
 }
+
+LAB_TTL_MINUTES = int(os.getenv("LAB_TTL_MINUTES", "60"))  # how long a lab runs before it's considered expired
 
 
 @app.get("/")
@@ -57,6 +74,14 @@ def cluster_health():
     }
 
 
+@app.get("/health/db")
+def db_health():
+    """Quick sanity check: can we actually talk to PostgreSQL?"""
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
+    return {"connected": True}
+
+
 def _infer_lab_type(namespace: str) -> str:
     """Guess the lab type from a namespace like 'lab-juice-shop-2fd28c'"""
     for lab_type in SUPPORTED_LABS:
@@ -66,51 +91,90 @@ def _infer_lab_type(namespace: str) -> str:
 
 
 def _lab_url(namespace: str) -> str:
-    """Build the Ingress-based URL for a lab, using nip.io for wildcard DNS
-    so every dynamically-named namespace resolves back to localhost without
-    needing /etc/hosts entries. Requires:
-        kubectl port-forward -n ingress-nginx svc/ingress-nginx-controller 8080:80
-    to be running."""
-    # NOTE: this still assumes the manual port-forward tunnel. We're replacing that
-    # with a kind-config.yaml port mapping in a later step, at which point this
-    # becomes just f"http://{namespace}.127.0.0.1.nip.io" with no port and no
-    # manual port-forward needed at all. Leaving as-is until that step.
+    """Lab URL via ingress-nginx, which kind maps to host port 8080.
+    nip.io resolves <namespace>.127.0.0.1.nip.io back to localhost."""
     return f"http://{namespace}.127.0.0.1.nip.io:8080"
 
 
-@app.get("/labs")
-def list_labs():
-    """List all active labs (namespaces prefixed with 'student-' or 'lab-')"""
-    namespaces = v1.list_namespace()
-    labs = []
+def _teardown_namespace(namespace: str) -> bool:
+    """Helm uninstall + delete namespace. True if the lab is gone (404 counts)."""
+    subprocess.run(
+        ["helm", "uninstall", namespace, "--namespace", namespace],
+        capture_output=True, text=True,
+    )
+    try:
+        v1.delete_namespace(name=namespace)
+    except client.exceptions.ApiException as e:
+        if e.status != 404:
+            print(f"[teardown] could not delete {namespace}: {e.status}", flush=True)
+            return False
+    return True
 
-    for ns in namespaces.items:
-        name = ns.metadata.name
-        if not (name.startswith("student-") or name.startswith("lab-")):
-            continue
 
-        pods = v1.list_namespaced_pod(namespace=name)
-        pod_statuses = [pod.status.phase for pod in pods.items]
+def _expire_stale_sessions(db: Session, user: User) -> None:
+    """Tear down this user's expired labs, then mark them ended.
+    A session is only marked ended once its namespace is really gone."""
+    now = datetime.now(timezone.utc)
+    stale = db.query(LabSession).filter(
+        LabSession.user_id == user.id,
+        LabSession.ended_at.is_(None),
+        LabSession.expires_at < now,
+    ).all()
+    for s in stale:
+        if _teardown_namespace(s.namespace):
+            s.ended_at = now
+    if stale:
+        db.commit()
 
-        labs.append({
-            "namespace": name,
-            "lab_type": _infer_lab_type(name) if name.startswith("lab-") else "student",
-            "created": ns.metadata.creation_timestamp.isoformat() if ns.metadata.creation_timestamp else None,
-            "pod_count": len(pods.items),
-            "pod_statuses": pod_statuses,
-            "lab_url": _lab_url(name),
-        })
-
-    return {"labs": labs}
+@app.get("/labs/me")
+def my_lab(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return the current user's active lab, if any."""
+    _expire_stale_sessions(db, user)
+    active = db.query(LabSession).filter(
+        LabSession.user_id == user.id,
+        LabSession.ended_at.is_(None),
+    ).first()
+    if not active:
+        return {"active": False}
+    return {
+        "active": True,
+        "lab_type": active.lab_type,
+        "namespace": active.namespace,
+        "lab_url": _lab_url(active.namespace),
+        "created_at": active.created_at.isoformat(),
+        "expires_at": active.expires_at.isoformat() if active.expires_at else None,
+        "ready": _lab_ready(active.namespace),
+    }
 
 
 @app.post("/labs/{lab_type}")
-def deploy_lab(lab_type: str):
+def deploy_lab(
+    lab_type: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Deploy a new lab of the given type into a freshly created namespace"""
     if lab_type not in SUPPORTED_LABS:
         raise HTTPException(
             status_code=400,
             detail=f"Unknown lab_type '{lab_type}'. Supported: {list(SUPPORTED_LABS.keys())}"
+        )
+
+    # Clear out any of this user's labs whose TTL has already passed
+    _expire_stale_sessions(db, user)
+
+    # Block if this user already has an active lab
+    active = db.query(LabSession).filter(
+        LabSession.user_id == user.id,
+        LabSession.ended_at.is_(None),
+    ).first()
+    if active:
+        raise HTTPException(
+            status_code=409,
+            detail=f"You already have an active lab ({active.namespace}). End it before starting a new one."
         )
 
     chart_path = SUPPORTED_LABS[lab_type]
@@ -136,6 +200,16 @@ def deploy_lab(lab_type: str):
             detail=f"Helm install failed: {result.stderr}"
         )
 
+    # Record this lab in the database
+    session = LabSession(
+        user_id=user.id,
+        lab_type=lab_type,
+        namespace=namespace,
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=LAB_TTL_MINUTES),
+    )
+    db.add(session)
+    db.commit()
+
     return {
         "deployed": True,
         "namespace": namespace,
@@ -146,12 +220,22 @@ def deploy_lab(lab_type: str):
 
 
 @app.delete("/labs/{namespace}")
-def delete_lab(namespace: str):
-    """Tear down a lab: uninstall its Helm release and delete the namespace"""
-    if not namespace.startswith("lab-"):
+def delete_lab(
+    namespace: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """End the current user's own active lab: uninstall its Helm release,
+    delete the namespace, and mark the session as ended."""
+    session = db.query(LabSession).filter(
+        LabSession.namespace == namespace,
+        LabSession.user_id == user.id,
+        LabSession.ended_at.is_(None),
+    ).first()
+    if not session:
         raise HTTPException(
-            status_code=400,
-            detail="Refusing to delete a namespace not created by this API (must start with 'lab-')"
+            status_code=404,
+            detail="No active lab with that namespace on your account"
         )
 
     uninstall_result = subprocess.run(
@@ -166,9 +250,57 @@ def delete_lab(namespace: str):
     except client.exceptions.ApiException as e:
         ns_delete_error = str(e)
 
+    session.ended_at = datetime.now(timezone.utc)
+    db.commit()
+
     return {
         "deleted": True,
         "namespace": namespace,
         "helm_uninstall_output": uninstall_result.stdout or uninstall_result.stderr,
         "namespace_delete_error": ns_delete_error,
     }
+
+
+# ---- Expiry reaper: the database is the source of truth for lab lifetime ----
+def _reap_expired_labs() -> None:
+    """End every lab whose expires_at has passed: helm uninstall, delete the
+    namespace, mark the session ended. Failed deletions retry next cycle."""
+    now = datetime.now(timezone.utc)
+    gen = get_db()
+    db = next(gen)
+    try:
+        expired = db.query(LabSession).filter(
+            LabSession.ended_at.is_(None),
+            LabSession.expires_at < now,
+        ).all()
+        for s in expired:
+            subprocess.run(
+                ["helm", "uninstall", s.namespace, "--namespace", s.namespace],
+                capture_output=True, text=True,
+            )
+            try:
+                v1.delete_namespace(name=s.namespace)
+            except client.exceptions.ApiException as e:
+                if e.status != 404:  # 404 = already gone, fine
+                    print(f"[reaper] could not delete {s.namespace}: {e.status}", flush=True)
+                    continue
+            s.ended_at = now
+            print(f"[reaper] ended expired lab {s.namespace}", flush=True)
+        if expired:
+            db.commit()
+    finally:
+        gen.close()
+
+
+def _start_reaper(interval_seconds: int = 60) -> None:
+    import threading, time
+
+    def loop():
+        while True:
+            try:
+                _reap_expired_labs()
+            except Exception as e:
+                print(f"[reaper] error: {e}", flush=True)
+            time.sleep(interval_seconds)
+
+    threading.Thread(target=loop, daemon=True, name="lab-reaper").start()

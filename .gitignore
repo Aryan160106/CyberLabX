@@ -1,1 +1,5 @@
 backend/__pycache__/
+*.tar
+*.zip
+node_modules/
+.env

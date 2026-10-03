@@ -1,9 +1,57 @@
-// ??? API client for the CyberLabX FastAPI backend ?????????????????????????????
-// Relative path, not a hardcoded host/port. The Ingress (set up in a later step)
-// routes anything under /api on this same origin to the backend Service. This is
-// what makes the URL work identically whether you're on Kind, a real cluster,
-// or a different laptop entirely ? nothing here assumes localhost:8000 anymore.
+// API client for the CyberLabX FastAPI backend.
+// Relative path: the Ingress routes /api on this same origin to the backend Service.
 const API_BASE = "/api";
+const TOKEN_KEY = "cyberlabx_token";
+export const UNAUTHORIZED_EVENT = "cyberlabx:unauthorized";
+
+export const tokenStore = {
+  get: () => localStorage.getItem(TOKEN_KEY),
+  set: (t: string) => localStorage.setItem(TOKEN_KEY, t),
+  clear: () => localStorage.removeItem(TOKEN_KEY),
+};
+
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers);
+  if (init.body) headers.set("Content-Type", "application/json");
+  const token = tokenStore.get();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    let detail = `Request failed (${res.status})`;
+    if (typeof err.detail === "string") detail = err.detail;
+    else if (Array.isArray(err.detail) && err.detail[0]?.msg) detail = err.detail[0].msg;
+    if (res.status === 401 && token) {
+      tokenStore.clear();
+      window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+    }
+    throw new ApiError(res.status, detail);
+  }
+  return res.json();
+}
+
+// ---- Types ----
+export interface User {
+  id: string;
+  email: string;
+  display_name: string;
+  xp: number;
+}
+
+export interface AuthResponse {
+  access_token: string;
+  token_type: string;
+  user: User;
+}
 
 export interface BackendLab {
   namespace: string;
@@ -29,27 +77,37 @@ export interface DeleteResponse {
   namespace_delete_error: string | null;
 }
 
-export async function fetchLabs(): Promise<BackendLab[]> {
-  const res = await fetch(`${API_BASE}/labs`);
-  if (!res.ok) throw new Error(`Failed to fetch labs: ${res.status}`);
-  const data = await res.json();
-  return data.labs;
+// ---- Auth ----
+export const signup = (email: string, password: string, displayName: string) =>
+  request<AuthResponse>("/auth/signup", {
+    method: "POST",
+    body: JSON.stringify({ email, password, display_name: displayName }),
+  });
+
+export const login = (email: string, password: string) =>
+  request<AuthResponse>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+
+export const fetchMe = () => request<User>("/auth/me");
+
+// ---- Labs ----
+
+export const deployLab = (labType: string) =>
+  request<DeployResponse>(`/labs/${labType}`, { method: "POST" });
+
+export const deleteLab = (namespace: string) =>
+  request<DeleteResponse>(`/labs/${namespace}`, { method: "DELETE" });
+// ---- Current user's own lab (Sprint 8.6) ----
+export interface MyLab {
+  active: boolean;
+  lab_type?: string;
+  namespace?: string;
+  lab_url?: string;
+  created_at?: string;
+  expires_at?: string | null;
+  ready?: boolean;
 }
 
-export async function deployLab(labType: string): Promise<DeployResponse> {
-  const res = await fetch(`${API_BASE}/labs/${labType}`, { method: "POST" });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `Deploy failed: ${res.status}`);
-  }
-  return res.json();
-}
-
-export async function deleteLab(namespace: string): Promise<DeleteResponse> {
-  const res = await fetch(`${API_BASE}/labs/${namespace}`, { method: "DELETE" });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `Delete failed: ${res.status}`);
-  }
-  return res.json();
-}
+export const fetchMyLab = () => request<MyLab>("/labs/me");

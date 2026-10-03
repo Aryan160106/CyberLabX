@@ -4,7 +4,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Uuid, create_engine
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint, Uuid, create_engine
 from sqlalchemy.engine import URL
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
@@ -57,6 +57,17 @@ class LabSession(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     flag: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+class QuizAnswer(Base):
+    """First answer a user gave to a quiz question (later attempts don't change it)."""
+    __tablename__ = "quiz_answers"
+    __table_args__ = (UniqueConstraint("user_id", "lab_id", "question_id"),)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    lab_id: Mapped[str] = mapped_column(String(50))
+    question_id: Mapped[str] = mapped_column(String(50))
+    correct: Mapped[bool] = mapped_column(Boolean)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 def init_db(retries: int = 30, delay: float = 2.0) -> None:
     """Create tables, waiting up to ~60s for Postgres to accept connections."""

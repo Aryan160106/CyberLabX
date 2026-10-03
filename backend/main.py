@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from db import engine, init_db, get_db, LabSession, User
 from auth import router as auth_router, get_current_user
+from quiz import router as quiz_router
 
 
 @asynccontextmanager
@@ -23,6 +24,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(auth_router)
+app.include_router(quiz_router)
 
 # Allow the frontend (running on Vite's dev server) to call this API from the browser
 app.add_middleware(

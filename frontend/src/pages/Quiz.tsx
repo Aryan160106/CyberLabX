@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -8,22 +8,33 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 
 import { labs } from "../data/labData";
-import { quizData } from "../data/quizData";
+import { answerQuiz, fetchQuiz } from "../api";
+import type { AnswerResult, QuizQuestion } from "../api";
 
 function Quiz() {
   const { labId } = useParams<{ labId: string }>();
   const navigate = useNavigate();
 
   const lab = labs.find((item) => item.id === labId);
-  const questions = labId ? quizData[labId] : undefined;
 
+  const [questions, setQuestions] = useState<QuizQuestion[] | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
+  const [result, setResult] = useState<AnswerResult | null>(null);
   const [score, setScore] = useState(0);
-  const [submitted, setSubmitted] = useState(false);
+  const [xpEarned, setXpEarned] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
   const [finished, setFinished] = useState(false);
 
-  if (!lab || !questions) {
+  useEffect(() => {
+    if (!labId) return;
+    fetchQuiz(labId)
+      .then((data) => setQuestions(data.questions))
+      .catch(() => setLoadFailed(true));
+  }, [labId]);
+
+  if (!lab || loadFailed) {
     return (
       <div className="quiz-page">
         <span className="eyebrow">QUIZ ERROR</span>
@@ -40,16 +51,31 @@ function Quiz() {
     );
   }
 
+  if (!questions) {
+    return (
+      <div className="quiz-page">
+        <span className="eyebrow">KNOWLEDGE CHECK</span>
+        <h1>Loading quiz...</h1>
+      </div>
+    );
+  }
+
   const question = questions[currentQuestion];
+  const submitted = result !== null;
 
-  const handleSubmit = () => {
-    if (selectedAnswer === null) return;
-
-    if (selectedAnswer === question.correctAnswer) {
-      setScore((value) => value + 1);
+  const handleSubmit = async () => {
+    if (selectedAnswer === null || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await answerQuiz(lab.id, question.id, selectedAnswer);
+      setResult(res);
+      if (res.correct) setScore((value) => value + 1);
+      setXpEarned((value) => value + res.xp_awarded);
+    } catch {
+      setLoadFailed(true);
+    } finally {
+      setSubmitting(false);
     }
-
-    setSubmitted(true);
   };
 
   const handleNext = () => {
@@ -60,12 +86,11 @@ function Quiz() {
 
     setCurrentQuestion((value) => value + 1);
     setSelectedAnswer(null);
-    setSubmitted(false);
+    setResult(null);
   };
 
   if (finished) {
-    const finalScore = score;
-    const percentage = Math.round((finalScore / questions.length) * 100);
+    const percentage = Math.round((score / questions.length) * 100);
 
     return (
       <div className="quiz-page">
@@ -88,8 +113,13 @@ function Quiz() {
           <h1>{percentage}%</h1>
 
           <p>
-            You answered {finalScore} of {questions.length} questions
-            correctly.
+            You answered {score} of {questions.length} questions correctly.
+          </p>
+
+          <p>
+            {xpEarned > 0
+              ? `+${xpEarned} XP earned`
+              : "XP is only awarded for your first attempt at each question."}
           </p>
 
           <button
@@ -144,7 +174,7 @@ function Quiz() {
           <div className="quiz-options">
             {question.options.map((option, index) => {
               const isSelected = selectedAnswer === index;
-              const isCorrect = index === question.correctAnswer;
+              const isCorrect = submitted && index === result.correct_answer;
 
               let className = "quiz-option";
 
@@ -152,15 +182,11 @@ function Quiz() {
                 className += " selected";
               }
 
-              if (submitted && isCorrect) {
+              if (isCorrect) {
                 className += " correct";
               }
 
-              if (
-                submitted &&
-                isSelected &&
-                index !== question.correctAnswer
-              ) {
+              if (submitted && isSelected && !result.correct) {
                 className += " incorrect";
               }
 
@@ -185,25 +211,19 @@ function Quiz() {
           {submitted && (
             <div
               className={`quiz-feedback ${
-                selectedAnswer === question.correctAnswer
-                  ? "feedback-correct"
-                  : "feedback-incorrect"
+                result.correct ? "feedback-correct" : "feedback-incorrect"
               }`}
             >
-              {selectedAnswer === question.correctAnswer ? (
+              {result.correct ? (
                 <CheckCircle2 size={17} />
               ) : (
                 <CircleAlert size={17} />
               )}
 
               <div>
-                <strong>
-                  {selectedAnswer === question.correctAnswer
-                    ? "Correct"
-                    : "Incorrect"}
-                </strong>
+                <strong>{result.correct ? "Correct" : "Incorrect"}</strong>
 
-                <p>{question.explanation}</p>
+                <p>{result.explanation}</p>
               </div>
             </div>
           )}
@@ -213,10 +233,10 @@ function Quiz() {
               <button
                 className="primary-button"
                 type="button"
-                disabled={selectedAnswer === null}
+                disabled={selectedAnswer === null || submitting}
                 onClick={handleSubmit}
               >
-                Submit Answer
+                {submitting ? "Checking..." : "Submit Answer"}
               </button>
             ) : (
               <button

@@ -111,3 +111,27 @@ export interface MyLab {
 }
 
 export const fetchMyLab = () => request<MyLab>("/labs/me");
+
+// ---- Quiz (graded on the server) ----
+export interface QuizQuestion {
+  id: string;
+  question: string;
+  options: string[];
+}
+
+export interface AnswerResult {
+  correct: boolean;
+  correct_answer: number;
+  explanation: string;
+  xp_awarded: number;
+  xp: number;
+}
+
+export const fetchQuiz = (labId: string) =>
+  request<{ lab_id: string; questions: QuizQuestion[] }>(`/labs/${labId}/quiz`);
+
+export const answerQuiz = (labId: string, questionId: string, selected: number) =>
+  request<AnswerResult>(`/labs/${labId}/quiz/answer`, {
+    method: "POST",
+    body: JSON.stringify({ question_id: questionId, selected }),
+  });

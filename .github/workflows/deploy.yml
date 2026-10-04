@@ -1,11 +1,13 @@
-name: CyberLabX CI
+name: CyberLabX CI/CD
 
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'k8s/**'
-      - 'backend/**'
+  workflow_dispatch:
+
+concurrency:
+  group: cyberlabx-deploy
+  cancel-in-progress: false
 
 jobs:
   lint:
@@ -15,7 +17,35 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Helm lint
+        shell: powershell
         run: helm lint k8s/juiceshop-lab
 
-      - name: Helm template (render check)
-        run: helm template test k8s/juiceshop-lab --set studentId=ci --set namespace=ci
+      - name: Helm render check
+        shell: powershell
+        run: helm template ci k8s/juiceshop-lab --set studentId=ci --set namespace=ci --set-string ctfKey=ci
+
+  deploy:
+    needs: lint
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Verify target cluster
+        shell: powershell
+        run: kubectl --context kind-cyberlabx get nodes
+
+      - name: Build and deploy with Skaffold
+        shell: powershell
+        run: C:\tools\skaffold.exe run --kube-context kind-cyberlabx
+
+      - name: Wait for rollout
+        shell: powershell
+        run: |
+          kubectl --context kind-cyberlabx rollout status deploy/cyberlabx-postgres --timeout=120s
+          kubectl --context kind-cyberlabx rollout status deploy/cyberlabx-backend --timeout=120s
+          kubectl --context kind-cyberlabx rollout status deploy/cyberlabx-frontend --timeout=120s
+
+      - name: Show running pods
+        shell: powershell
+        run: kubectl --context kind-cyberlabx get pods

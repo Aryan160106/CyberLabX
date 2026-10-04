@@ -20,7 +20,7 @@ WORKDIR /app
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY backend/*.py .
+COPY backend/*.py ./
 COPY k8s/ ./charts/
 
 EXPOSE 8000

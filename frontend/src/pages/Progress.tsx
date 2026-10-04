@@ -1,4 +1,4 @@
-
+import { useEffect, useState } from "react";
 import {
   ArrowRight,
   BookOpen,
@@ -7,9 +7,22 @@ import {
   Trophy,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { fetchProgress } from "../api";
+import type { ProgressData } from "../api";
 
 function Progress() {
   const navigate = useNavigate();
+  const [data, setData] = useState<ProgressData | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    fetchProgress().then(setData).catch(() => setFailed(true));
+  }, []);
+
+  const current = data?.current ?? null;
+  const completedStages = (data?.labs ?? []).flatMap((lab) =>
+    lab.stages.filter((s) => s.done).map((s) => ({ lab: lab.name, stage: s.label })),
+  );
 
   return (
     <div className="progress-page">
@@ -24,30 +37,37 @@ function Progress() {
         </div>
       </div>
 
-      <section className="progress-overview">
-        <div className="progress-overview-main">
-          <span className="card-label">CURRENT TRAINING</span>
-          <h2>OWASP Juice Shop</h2>
-          <p>
-            Continue your current security training path and complete the
-            remaining practical missions.
-          </p>
+      {failed && <p role="alert">Could not load your progress.</p>}
 
-          <div className="progress-track">
-            <div className="progress-fill" style={{ width: "72%" }} />
+      {current && (
+        <section className="progress-overview">
+          <div className="progress-overview-main">
+            <span className="card-label">CURRENT TRAINING</span>
+            <h2>{current.name}</h2>
+            <p>
+              {current.stages.filter((s) => s.done).length} of{" "}
+              {current.stages.length} stages complete.
+            </p>
+
+            <div className="progress-track">
+              <div
+                className="progress-fill"
+                style={{ width: `${current.progress}%` }}
+              />
+            </div>
+
+            <div className="progress-meta">
+              <span>Lab progress</span>
+              <strong>{current.progress}%</strong>
+            </div>
           </div>
 
-          <div className="progress-meta">
-            <span>Lab progress</span>
-            <strong>72%</strong>
+          <div className="progress-overview-status">
+            <CheckCircle2 size={20} />
+            <span>{current.progress === 100 ? "COMPLETE" : "IN PROGRESS"}</span>
           </div>
-        </div>
-
-        <div className="progress-overview-status">
-          <CheckCircle2 size={20} />
-          <span>IN PROGRESS</span>
-        </div>
-      </section>
+        </section>
+      )}
 
       <div className="progress-grid">
         <section className="progress-panel">
@@ -59,44 +79,22 @@ function Progress() {
             <Target size={20} />
           </div>
 
-          <div className="skill-row">
-            <div className="skill-info">
-              <strong>Web Security</strong>
-              <span>Developing</span>
+          {data?.skills.map((skill) => (
+            <div className="skill-row" key={skill.category}>
+              <div className="skill-info">
+                <strong>{skill.category}</strong>
+                <span>
+                  {skill.earned} / {skill.max} XP
+                </span>
+              </div>
+
+              <div className="skill-bar">
+                <div style={{ width: `${skill.percent}%` }} />
+              </div>
+
+              <strong className="skill-value">{skill.percent}%</strong>
             </div>
-
-            <div className="skill-bar">
-              <div style={{ width: "68%" }} />
-            </div>
-
-            <strong className="skill-value">68%</strong>
-          </div>
-
-          <div className="skill-row">
-            <div className="skill-info">
-              <strong>Reconnaissance</strong>
-              <span>Developing</span>
-            </div>
-
-            <div className="skill-bar">
-              <div style={{ width: "54%" }} />
-            </div>
-
-            <strong className="skill-value">54%</strong>
-          </div>
-
-          <div className="skill-row">
-            <div className="skill-info">
-              <strong>Authentication</strong>
-              <span>Developing</span>
-            </div>
-
-            <div className="skill-bar">
-              <div style={{ width: "42%" }} />
-            </div>
-
-            <strong className="skill-value">42%</strong>
-          </div>
+          ))}
         </section>
 
         <section className="progress-panel">
@@ -108,45 +106,53 @@ function Progress() {
             <Trophy size={20} />
           </div>
 
-          <div className="activity-row">
-            <div className="activity-icon">
-              <BookOpen size={17} />
+          {completedStages.map((item) => (
+            <div className="activity-row" key={item.lab + item.stage}>
+              <div className="activity-icon">
+                <BookOpen size={17} />
+              </div>
+              <div>
+                <strong>{item.stage}</strong>
+                <span>{item.lab}</span>
+              </div>
+              <CheckCircle2 size={17} />
             </div>
-            <div>
-              <strong>Security Fundamentals</strong>
-              <span>Learning module completed</span>
-            </div>
-            <CheckCircle2 size={17} />
-          </div>
+          ))}
 
-          <div className="activity-row">
-            <div className="activity-icon">
-              <Target size={17} />
+          {data && completedStages.length === 0 && (
+            <div className="activity-row">
+              <div>
+                <strong>Nothing completed yet</strong>
+                <span>Finish a quiz or capture a flag to see it here</span>
+              </div>
             </div>
-            <div>
-              <strong>Web Security Basics</strong>
-              <span>Learning module completed</span>
-            </div>
-            <CheckCircle2 size={17} />
-          </div>
+          )}
         </section>
       </div>
 
       <section className="progress-next">
         <div>
           <span className="card-label">NEXT RECOMMENDATION</span>
-          <h2>Continue Web Security Practice</h2>
+          <h2>
+            {data?.recommended
+              ? `Continue ${data.recommended.name}`
+              : "All available labs complete"}
+          </h2>
           <p>
-            Return to your active lab and complete the next practical mission.
+            {data?.recommended
+              ? `${data.recommended.reason}. This is a simple rule, not AI.`
+              : "New labs will appear as they are added."}
           </p>
         </div>
 
         <button
           className="primary-button"
           type="button"
-          onClick={() => navigate("/labs/juice-shop/practice")}
+          onClick={() =>
+            navigate(data?.recommended ? `/labs/${data.recommended.lab_id}` : "/labs")
+          }
         >
-          Continue Practice
+          {data?.recommended ? "Open Lab" : "Explore Labs"}
           <ArrowRight size={16} />
         </button>
       </section>

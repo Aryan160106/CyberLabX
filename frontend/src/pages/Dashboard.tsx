@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   ArrowRight,
   BookOpen,
@@ -9,10 +10,21 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
+import { fetchProgress } from "../api";
+import type { ProgressData } from "../api";
 
 function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [data, setData] = useState<ProgressData | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    fetchProgress().then(setData).catch(() => setFailed(true));
+  }, []);
+
+  const current = data?.current ?? null;
+  const activeIndex = current ? current.stages.findIndex((s) => !s.done) : -1;
 
   return (
     <div className="dashboard-page">
@@ -30,115 +42,108 @@ function Dashboard() {
 
         <div className="dashboard-intro-status">
           <span className="status-dot" />
-          Training path active
+          {data ? `${data.xp.toLocaleString()} XP earned` : "Loading progress"}
         </div>
       </section>
 
-      <section className="dashboard-feature">
-        <div className="dashboard-feature-main">
-          <div className="dashboard-feature-icon">
-            <FlaskConical size={20} />
+      {failed && <p role="alert">Could not load your progress.</p>}
+
+      {current && (
+        <>
+          <section className="dashboard-feature">
+            <div className="dashboard-feature-main">
+              <div className="dashboard-feature-icon">
+                <FlaskConical size={20} />
+              </div>
+
+              <div>
+                <span className="card-label">CURRENT LAB</span>
+
+                <h2>{current.name}</h2>
+
+                <p>{current.category}</p>
+              </div>
+            </div>
+
+            <div className="dashboard-feature-progress">
+              <div className="dashboard-progress-header">
+                <span>LAB PROGRESS</span>
+                <strong>{current.progress}%</strong>
+              </div>
+
+              <div className="dashboard-progress-track">
+                <div
+                  className="dashboard-progress-value"
+                  style={{ width: `${current.progress}%` }}
+                />
+              </div>
+
+              <div className="dashboard-progress-meta">
+                <span>
+                  {current.stages.filter((s) => s.done).length} of{" "}
+                  {current.stages.length} stages complete
+                </span>
+
+                <button
+                  className="dashboard-link"
+                  type="button"
+                  onClick={() => navigate(`/labs/${current.lab_id}`)}
+                >
+                  Continue
+                  <ArrowRight size={14} />
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <div className="dashboard-section-heading">
+            <div>
+              <span className="card-label">TRAINING PATH</span>
+              <h2>Your current progress</h2>
+            </div>
           </div>
 
-          <div>
-            <span className="card-label">CURRENT LAB</span>
+          <section className="dashboard-path">
+            {current.stages.map((stage, i) => {
+              const state = stage.done ? "completed" : i === activeIndex ? "active" : "";
+              return (
+                <div key={stage.key} style={{ display: "contents" }}>
+                  {i > 0 && (
+                    <div
+                      className={`dashboard-path-line ${
+                        current.stages[i - 1].done ? "completed" : ""
+                      }`}
+                    />
+                  )}
+                  <div className={`dashboard-path-step ${state}`}>
+                    <div className="dashboard-path-icon">
+                      {stage.done ? (
+                        <CheckCircle2 size={17} />
+                      ) : i === activeIndex ? (
+                        <Target size={17} />
+                      ) : (
+                        <ShieldCheck size={17} />
+                      )}
+                    </div>
 
-            <h2>OWASP Juice Shop</h2>
-
-            <p>
-              Practice identifying common web application vulnerabilities in a
-              controlled environment.
-            </p>
-          </div>
-        </div>
-
-        <div className="dashboard-feature-progress">
-          <div className="dashboard-progress-header">
-            <span>LAB PROGRESS</span>
-            <strong>72%</strong>
-          </div>
-
-          <div className="dashboard-progress-track">
-            <div className="dashboard-progress-value" />
-          </div>
-
-          <div className="dashboard-progress-meta">
-            <span>3 of 4 learning stages complete</span>
-
-            <button
-              className="dashboard-link"
-              type="button"
-              onClick={() => navigate("/labs/juice-shop")}
-            >
-              Continue
-              <ArrowRight size={14} />
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <div className="dashboard-section-heading">
-        <div>
-          <span className="card-label">TRAINING PATH</span>
-          <h2>Your current progress</h2>
-        </div>
-      </div>
-
-      <section className="dashboard-path">
-        <div className="dashboard-path-step completed">
-          <div className="dashboard-path-icon">
-            <CheckCircle2 size={17} />
-          </div>
-
-          <div>
-            <span>01</span>
-            <strong>Learn</strong>
-            <small>Concept completed</small>
-          </div>
-        </div>
-
-        <div className="dashboard-path-line completed" />
-
-        <div className="dashboard-path-step completed">
-          <div className="dashboard-path-icon">
-            <CheckCircle2 size={17} />
-          </div>
-
-          <div>
-            <span>02</span>
-            <strong>Quiz</strong>
-            <small>Knowledge checked</small>
-          </div>
-        </div>
-
-        <div className="dashboard-path-line completed" />
-
-        <div className="dashboard-path-step active">
-          <div className="dashboard-path-icon">
-            <Target size={17} />
-          </div>
-
-          <div>
-            <span>03</span>
-            <strong>Practice</strong>
-            <small>Current stage</small>
-          </div>
-        </div>
-
-        <div className="dashboard-path-line" />
-
-        <div className="dashboard-path-step">
-          <div className="dashboard-path-icon">
-            <ShieldCheck size={17} />
-          </div>
-
-          <div>
-            <span>04</span>
-            <strong>Evaluate</strong>
-            <small>Complete the mission</small>
-          </div>
-        </div>
-      </section>
+                    <div>
+                      <span>{String(i + 1).padStart(2, "0")}</span>
+                      <strong>{stage.label}</strong>
+                      <small>
+                        {stage.done
+                          ? "Complete"
+                          : i === activeIndex
+                            ? "Current stage"
+                            : "Not started"}
+                      </small>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </section>
+        </>
+      )}
 
       <section className="dashboard-grid">
         <article className="dashboard-panel">
@@ -151,38 +156,23 @@ function Dashboard() {
             <ShieldCheck size={18} />
           </div>
 
-          <div className="skill-row">
-            <div className="skill-info">
-              <span>Web Security</span>
-              <strong>72%</strong>
-            </div>
+          {data?.skills.map((skill) => (
+            <div className="skill-row" key={skill.category}>
+              <div className="skill-info">
+                <span>{skill.category}</span>
+                <strong>{skill.percent}%</strong>
+              </div>
 
-            <div className="skill-track">
-              <div className="skill-value web-security" />
+              <div className="skill-track">
+                <div
+                  className="skill-value"
+                  style={{ width: `${skill.percent}%` }}
+                />
+              </div>
             </div>
-          </div>
+          ))}
 
-          <div className="skill-row">
-            <div className="skill-info">
-              <span>Network Security</span>
-              <strong>38%</strong>
-            </div>
-
-            <div className="skill-track">
-              <div className="skill-value network-security" />
-            </div>
-          </div>
-
-          <div className="skill-row">
-            <div className="skill-info">
-              <span>Linux Security</span>
-              <strong>24%</strong>
-            </div>
-
-            <div className="skill-track">
-              <div className="skill-value linux-security" />
-            </div>
-          </div>
+          {data && data.skills.length === 0 && <p>No skill data yet.</p>}
         </article>
 
         <article className="dashboard-panel dashboard-next">
@@ -192,21 +182,33 @@ function Dashboard() {
             <BookOpen size={18} />
           </div>
 
-          <h3>Network reconnaissance</h3>
-
-          <p>
-            Learn how security analysts identify hosts, services, and exposed
-            attack surfaces.
-          </p>
-
-          <button
-            className="dashboard-link"
-            type="button"
-            onClick={() => navigate("/labs")}
-          >
-            Explore Labs
-            <ArrowRight size={14} />
-          </button>
+          {data?.recommended ? (
+            <>
+              <h3>{data.recommended.name}</h3>
+              <p>{data.recommended.reason}. This is a simple rule, not AI.</p>
+              <button
+                className="dashboard-link"
+                type="button"
+                onClick={() => navigate(`/labs/${data.recommended!.lab_id}`)}
+              >
+                Open lab
+                <ArrowRight size={14} />
+              </button>
+            </>
+          ) : (
+            <>
+              <h3>All available labs complete</h3>
+              <p>New labs will appear here as they are added.</p>
+              <button
+                className="dashboard-link"
+                type="button"
+                onClick={() => navigate("/labs")}
+              >
+                Explore Labs
+                <ArrowRight size={14} />
+              </button>
+            </>
+          )}
         </article>
       </section>
 
@@ -219,44 +221,36 @@ function Dashboard() {
         </div>
 
         <div className="activity-list">
-          <div className="activity-item">
-            <div className="activity-icon">
-              <CheckCircle2 size={16} />
+          {data?.activity.map((item) => (
+            <div className="activity-item" key={item.at + item.title}>
+              <div className="activity-icon">
+                {item.title === "Flag captured" ? (
+                  <Target size={16} />
+                ) : (
+                  <CheckCircle2 size={16} />
+                )}
+              </div>
+
+              <div>
+                <strong>{item.title}</strong>
+                <span>{item.detail}</span>
+              </div>
+
+              <time>{new Date(item.at).toLocaleString()}</time>
             </div>
+          ))}
 
-            <div>
-              <strong>Knowledge check completed</strong>
-              <span>OWASP Juice Shop</span>
+          {data && data.activity.length === 0 && (
+            <div className="activity-item">
+              <div className="activity-icon">
+                <Clock3 size={16} />
+              </div>
+              <div>
+                <strong>No activity yet</strong>
+                <span>Take a quiz or launch a lab to get started</span>
+              </div>
             </div>
-
-            <time>Today</time>
-          </div>
-
-          <div className="activity-item">
-            <div className="activity-icon">
-              <Target size={16} />
-            </div>
-
-            <div>
-              <strong>Practice environment unlocked</strong>
-              <span>OWASP Juice Shop</span>
-            </div>
-
-            <time>Today</time>
-          </div>
-
-          <div className="activity-item">
-            <div className="activity-icon">
-              <Clock3 size={16} />
-            </div>
-
-            <div>
-              <strong>Learning module reviewed</strong>
-              <span>Web application vulnerabilities</span>
-            </div>
-
-            <time>Yesterday</time>
-          </div>
+          )}
         </div>
       </section>
     </div>

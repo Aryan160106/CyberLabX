@@ -148,3 +148,42 @@ export const submitFlag = (flag: string) =>
     method: "POST",
     body: JSON.stringify({ flag }),
   });
+
+// ---- Progress (real data for Dashboard / Progress) ----
+export interface LabStage { key: string; label: string; done: boolean }
+export interface LabProgress {
+  lab_id: string;
+  name: string;
+  category: string;
+  stages: LabStage[];
+  progress: number;
+  quiz: { answered: number; total: number; correct: number };
+}
+export interface ProgressData {
+  xp: number;
+  labs: LabProgress[];
+  current: LabProgress | null;
+  skills: { category: string; earned: number; max: number; percent: number }[];
+  activity: { title: string; detail: string; at: string }[];
+  recommended: { lab_id: string; name: string; reason: string } | null;
+}
+export const fetchProgress = () => request<ProgressData>("/me/progress");
+
+// ---- Account ----
+export const updateProfile = (displayName: string) =>
+  request<{ display_name: string }>("/account/profile", {
+    method: "PATCH",
+    body: JSON.stringify({ display_name: displayName }),
+  });
+
+export const changePassword = (currentPassword: string, newPassword: string) =>
+  request<{ changed: boolean }>("/account/password", {
+    method: "POST",
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  });
+
+export const deleteAccount = (password: string) =>
+  request<{ deleted: boolean }>("/account/delete", {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });

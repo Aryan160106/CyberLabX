@@ -15,6 +15,8 @@ from db import engine, init_db, get_db, LabSession, User
 from auth import router as auth_router, get_current_user
 from quiz import router as quiz_router
 from missions import router as missions_router
+from progress import router as progress_router
+from account import router as account_router
 
 
 @asynccontextmanager
@@ -28,6 +30,8 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(auth_router)
 app.include_router(quiz_router)
 app.include_router(missions_router)
+app.include_router(progress_router)
+app.include_router(account_router)
 
 # Allow the frontend (running on Vite's dev server) to call this API from the browser
 app.add_middleware(

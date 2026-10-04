@@ -1,16 +1,12 @@
-name: CyberLabX CI/CD
+name: CyberLabX CI
 
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
 
-concurrency:
-  group: cyberlabx-deploy
-  cancel-in-progress: false
-
 jobs:
-  lint:
+  lint-and-build:
     runs-on: self-hosted
     steps:
       - name: Checkout code
@@ -24,28 +20,6 @@ jobs:
         shell: powershell
         run: helm template ci k8s/juiceshop-lab --set studentId=ci --set namespace=ci --set-string ctfKey=ci
 
-  deploy:
-    needs: lint
-    runs-on: self-hosted
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Verify target cluster
+      - name: Build images (frontend type-check + backend)
         shell: powershell
-        run: kubectl --context kind-cyberlabx get nodes
-
-      - name: Build and deploy with Skaffold
-        shell: powershell
-        run: C:\tools\skaffold.exe run --kube-context kind-cyberlabx
-
-      - name: Wait for rollout
-        shell: powershell
-        run: |
-          kubectl --context kind-cyberlabx rollout status deploy/cyberlabx-postgres --timeout=120s
-          kubectl --context kind-cyberlabx rollout status deploy/cyberlabx-backend --timeout=120s
-          kubectl --context kind-cyberlabx rollout status deploy/cyberlabx-frontend --timeout=120s
-
-      - name: Show running pods
-        shell: powershell
-        run: kubectl --context kind-cyberlabx get pods
+        run: C:\tools\skaffold.exe build --kube-context kind-cyberlabx

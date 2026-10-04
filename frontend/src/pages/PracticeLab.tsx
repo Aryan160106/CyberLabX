@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ArrowLeft,
   CircleHelp,
@@ -11,7 +11,8 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 
 import { labs } from "../data/labData";
-import { ApiError, deleteLab, deployLab, fetchMyLab } from "../api";
+import { ApiError, deleteLab, deployLab, fetchMyLab, submitFlag } from "../api";
+import { useAuth } from "../auth";
 import type { MyLab } from "../api";
 
 function formatRemaining(ms: number) {
@@ -24,6 +25,7 @@ function formatRemaining(ms: number) {
 function PracticeLab() {
   const { labId } = useParams<{ labId: string }>();
   const navigate = useNavigate();
+  const { setXp } = useAuth();
 
   const lab = labs.find((item) => item.id === labId);
 
@@ -32,6 +34,9 @@ function PracticeLab() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [flagInput, setFlagInput] = useState("");
+  const [flagBusy, setFlagBusy] = useState(false);
+  const [flagMsg, setFlagMsg] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -71,6 +76,29 @@ function PracticeLab() {
   useEffect(() => {
     if (active && remaining !== null && remaining <= 0) refresh();
   }, [active, remaining, refresh]);
+
+  const handleSubmitFlag = async () => {
+    setFlagBusy(true);
+    setFlagMsg(null);
+    try {
+      const res = await submitFlag(flagInput.trim());
+      if (res.correct) {
+        setXp(res.xp);
+        setFlagInput("");
+        setFlagMsg(
+          res.xp_awarded > 0
+            ? `Correct! +${res.xp_awarded} XP`
+            : "Correct. XP for this mission was already awarded.",
+        );
+      } else {
+        setFlagMsg("Incorrect flag. Solve the challenge in your lab and copy the flag code it shows.");
+      }
+    } catch (e) {
+      setFlagMsg(e instanceof ApiError ? e.message : "Could not check the flag");
+    } finally {
+      setFlagBusy(false);
+    }
+  };
 
   const handleLaunch = async () => {
     if (!lab) return;
@@ -214,18 +242,21 @@ function PracticeLab() {
 
           <div className="flag-section">
             <span className="card-label">MISSION FLAG</span>
+            {flagMsg && <p role="status">{flagMsg}</p>}
 
             <div className="flag-input">
               <Flag size={15} />
 
               <input
                 type="text"
+                value={flagInput}
+                onChange={(e) => setFlagInput(e.target.value)}
                 placeholder="Enter flag..."
                 aria-label="Mission flag"
               />
             </div>
 
-            <button className="primary-button flag-submit" type="button">
+            <button className="primary-button flag-submit" type="button" disabled={!isThisLab || !flagInput.trim() || flagBusy} onClick={handleSubmitFlag}>
               Submit Flag
             </button>
           </div>

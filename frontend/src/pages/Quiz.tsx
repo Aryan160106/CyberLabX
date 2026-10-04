@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -10,10 +10,12 @@ import { useNavigate, useParams } from "react-router-dom";
 import { labs } from "../data/labData";
 import { answerQuiz, fetchQuiz } from "../api";
 import type { AnswerResult, QuizQuestion } from "../api";
+import { useAuth } from "../auth";
 
 function Quiz() {
   const { labId } = useParams<{ labId: string }>();
   const navigate = useNavigate();
+  const { setXp } = useAuth();
 
   const lab = labs.find((item) => item.id === labId);
 
@@ -69,6 +71,7 @@ function Quiz() {
     try {
       const res = await answerQuiz(lab.id, question.id, selectedAnswer);
       setResult(res);
+      setXp(res.xp);
       if (res.correct) setScore((value) => value + 1);
       setXpEarned((value) => value + res.xp_awarded);
     } catch {

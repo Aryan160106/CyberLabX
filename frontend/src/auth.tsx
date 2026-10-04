@@ -16,6 +16,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, displayName: string) => Promise<void>;
   logout: () => void;
+  setXp: (xp: number) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -58,9 +59,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const setXp = useCallback((xp: number) => {
+    setUser((u) => (u ? { ...u, xp } : u));
+  }, []);
+
   const value = useMemo(
-    () => ({ user, loading, login, signup, logout }),
-    [user, loading, login, signup, logout],
+    () => ({ user, loading, login, signup, logout, setXp }),
+    [user, loading, login, signup, logout, setXp],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

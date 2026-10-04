@@ -2,3 +2,4 @@
 namespace: student-a
 nodePort: 30001
 image: bkimminich/juice-shop:v17.2.0
+ctfKey: ""

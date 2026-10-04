@@ -1,4 +1,5 @@
 import os
+import secrets
 import subprocess
 import uuid
 from contextlib import asynccontextmanager
@@ -13,6 +14,7 @@ from sqlalchemy.orm import Session
 from db import engine, init_db, get_db, LabSession, User
 from auth import router as auth_router, get_current_user
 from quiz import router as quiz_router
+from missions import router as missions_router
 
 
 @asynccontextmanager
@@ -25,6 +27,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.include_router(auth_router)
 app.include_router(quiz_router)
+app.include_router(missions_router)
 
 # Allow the frontend (running on Vite's dev server) to call this API from the browser
 app.add_middleware(
@@ -128,6 +131,19 @@ def _expire_stale_sessions(db: Session, user: User) -> None:
     if stale:
         db.commit()
 
+def _lab_ready(namespace: str) -> bool:
+    """True once every pod in the lab namespace is Running and Ready."""
+    try:
+        pods = v1.list_namespaced_pod(namespace=namespace).items
+    except client.exceptions.ApiException:
+        return False
+    return bool(pods) and all(
+        p.status.phase == "Running"
+        and p.status.container_statuses
+        and all(c.ready for c in p.status.container_statuses)
+        for p in pods
+    )
+
 @app.get("/labs/me")
 def my_lab(
     user: User = Depends(get_current_user),
@@ -181,6 +197,7 @@ def deploy_lab(
 
     chart_path = SUPPORTED_LABS[lab_type]
     suffix = uuid.uuid4().hex[:6]
+    ctf_key = secrets.token_hex(16)  # per-launch Juice Shop CTF secret
     namespace = f"lab-{lab_type}-{suffix}"
     release_name = namespace
 
@@ -191,6 +208,7 @@ def deploy_lab(
             "--create-namespace",
             "--set", f"namespace={namespace}",
             "--set", f"studentId={namespace}",
+            "--set-string", f"ctfKey={ctf_key}",
         ],
         capture_output=True,
         text=True,
@@ -208,6 +226,7 @@ def deploy_lab(
         lab_type=lab_type,
         namespace=namespace,
         expires_at=datetime.now(timezone.utc) + timedelta(minutes=LAB_TTL_MINUTES),
+        flag=ctf_key,  # stores the per-launch CTF secret; never sent to the client
     )
     db.add(session)
     db.commit()

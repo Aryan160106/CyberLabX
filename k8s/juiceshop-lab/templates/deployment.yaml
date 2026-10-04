@@ -1,4 +1,4 @@
-﻿apiVersion: apps/v1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: juiceshop-{{ .Values.studentId }}
@@ -18,6 +18,11 @@ spec:
       containers:
         - name: juiceshop
           image: {{ .Values.image }}
+          env:
+            - name: NODE_ENV
+              value: ctf
+            - name: CTF_KEY
+              value: {{ .Values.ctfKey | quote }}
           ports:
             - containerPort: 3000
           readinessProbe:

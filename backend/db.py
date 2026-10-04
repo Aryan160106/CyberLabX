@@ -69,6 +69,15 @@ class QuizAnswer(Base):
     correct: Mapped[bool] = mapped_column(Boolean)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
+class FlagCapture(Base):
+    """One XP-awarding flag capture per user per mission."""
+    __tablename__ = "flag_captures"
+    __table_args__ = (UniqueConstraint("user_id", "mission_id"),)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    mission_id: Mapped[str] = mapped_column(String(50))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
 def init_db(retries: int = 30, delay: float = 2.0) -> None:
     """Create tables, waiting up to ~60s for Postgres to accept connections."""
     for attempt in range(1, retries + 1):

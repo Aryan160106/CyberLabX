@@ -135,3 +135,16 @@ export const answerQuiz = (labId: string, questionId: string, selected: number) 
     method: "POST",
     body: JSON.stringify({ question_id: questionId, selected }),
   });
+
+// ---- Mission flag ----
+export interface FlagResult {
+  correct: boolean;
+  xp_awarded: number;
+  xp: number;
+}
+
+export const submitFlag = (flag: string) =>
+  request<FlagResult>("/labs/me/flag", {
+    method: "POST",
+    body: JSON.stringify({ flag }),
+  });

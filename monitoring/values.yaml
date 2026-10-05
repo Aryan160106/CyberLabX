@@ -1,0 +1,49 @@
+# Trimmed kube-prometheus-stack for a local kind cluster
+alertmanager:
+  enabled: false
+nodeExporter:
+  enabled: false
+# kind does not expose these control-plane endpoints; disabling avoids dead targets
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
+prometheus:
+  prometheusSpec:
+    retention: 12h
+    resources:
+      requests:
+        cpu: 100m
+        memory: 400Mi
+      limits:
+        memory: 1Gi
+grafana:
+  livenessProbe:
+    httpGet:
+      path: /api/health
+      port: 3000
+    initialDelaySeconds: 180
+    timeoutSeconds: 30
+    failureThreshold: 10
+  readinessProbe:
+    httpGet:
+      path: /api/health
+      port: 3000
+    initialDelaySeconds: 120
+    timeoutSeconds: 10
+    failureThreshold: 30
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 384Mi
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+      - grafana.127.0.0.1.nip.io

@@ -11,6 +11,7 @@ import PracticeLab from "./pages/PracticeLab";
 import Progress from "./pages/Progress";
 import Quiz from "./pages/Quiz";
 import Settings from "./pages/Settings";
+import { labs } from "./data/labData";
 
 export default function App() {
   return (
@@ -27,7 +28,7 @@ export default function App() {
           <Route path="/labs/:labId/learning" element={<Learning />} />
           <Route path="/labs/:labId/quiz" element={<Quiz />} />
           <Route path="/labs/:labId/practice" element={<PracticeLab />} />
-          <Route path="/learning" element={<Learning />} />
+          <Route path="/learning" element={<Navigate to={`/labs/${labs.find((l) => l.status === "Available")?.id ?? "juice-shop"}/practice`} replace />} />
           <Route path="/progress" element={<Progress />} />
           <Route path="/settings" element={<Settings />} />
         </Route>

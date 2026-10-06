@@ -1,10 +1,12 @@
 import { ArrowLeft, Clock3, ShieldCheck } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { labs } from "../data/labData";
+import { useQuizDone } from "../useQuizDone";
 
 function LabDetail() {
   const { labId } = useParams<{ labId: string }>();
   const navigate = useNavigate();
+  const quizDone = useQuizDone(labId);
 
   const lab = labs.find((item) => item.id === labId);
 

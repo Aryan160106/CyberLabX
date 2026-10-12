@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+﻿import { Navigate, Route, Routes } from "react-router-dom";
 import { RequireAuth } from "./auth";
 import AppLayout from "./components/AppLayout";
 import AuthPage from "./pages/AuthPage";
@@ -7,11 +7,12 @@ import LabDetail from "./pages/LabDetail";
 import Labs from "./pages/Labs";
 import Landing from "./pages/Landing";
 import Learning from "./pages/Learning";
+import LearningHub from "./pages/LearningHub";
 import PracticeLab from "./pages/PracticeLab";
 import Progress from "./pages/Progress";
 import Quiz from "./pages/Quiz";
 import Settings from "./pages/Settings";
-import { labs } from "./data/labData";
+
 
 export default function App() {
   return (
@@ -28,7 +29,7 @@ export default function App() {
           <Route path="/labs/:labId/learning" element={<Learning />} />
           <Route path="/labs/:labId/quiz" element={<Quiz />} />
           <Route path="/labs/:labId/practice" element={<PracticeLab />} />
-          <Route path="/learning" element={<Navigate to={`/labs/${labs.find((l) => l.status === "Available")?.id ?? "juice-shop"}/practice`} replace />} />
+          <Route path="/learning" element={<LearningHub />} />
           <Route path="/progress" element={<Progress />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
@@ -38,3 +39,4 @@ export default function App() {
     </Routes>
   );
 }
+

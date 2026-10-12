@@ -1,4 +1,4 @@
-import {
+﻿import {
   BookOpen,
   FlaskConical,
   LayoutDashboard,
@@ -6,15 +6,32 @@ import {
   Settings as SettingsIcon,
   Trophy,
 } from "lucide-react";
+import { useEffect } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { useAuth } from "../auth";
+import { labs } from "../data/labData";
 
 import "../App.css";
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
   const { pathname } = useLocation();
+
+  // Remember the last learning/quiz/practice page so the Learning hub can resume it.
+  useEffect(() => {
+    const m = pathname.match(/^\/labs\/([^/]+)\/(learning|quiz|practice)$/);
+    if (m && labs.some((l) => l.id === m[1])) {
+      try {
+        localStorage.setItem(
+          "cyberlabx:lastLab",
+          JSON.stringify({ labId: m[1], path: pathname })
+        );
+      } catch {
+        /* storage unavailable */
+      }
+    }
+  }, [pathname]);
 
   // Lab sub-pages (/labs/:id/...) have their own header, so hide the topbar.
   const hideTopbar = /^\/labs\/.+/.test(pathname);
@@ -111,3 +128,4 @@ export default function AppLayout() {
     </div>
   );
 }
+

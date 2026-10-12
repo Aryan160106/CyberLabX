@@ -2672,3 +2672,27 @@ body {
 .logout-button:hover { color: #ff6b6b; border-color: #3a2a2a; }
 
 .sidebar-user + .sidebar-status { margin-top: 0; }
+
+/* Learning hub */
+.hub-continue {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px;
+  margin: 24px 0 32px;
+  border: 1px solid #b7f34a;
+  background: rgba(183, 243, 74, 0.05);
+}
+.hub-continue h2 { margin: 6px 0; }
+.hub-continue p { margin: 0; opacity: 0.7; }
+.hub-list { display: grid; gap: 12px; margin-top: 12px; }
+.hub-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.hub-row small { opacity: 0.6; }

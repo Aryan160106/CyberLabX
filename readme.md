@@ -1,116 +1,196 @@
 # CyberLabX
-cyberlabx is a tool that helps students to deploy the cyberlabs easily in just 1 click instead of mannually deploying it which is one of the most heactic work evrytime , we just simply that work 
+
+A platform where students learn a security concept, then attack a real vulnerable app that was spun up just for them. Each lab runs in its own Kubernetes namespace and is deleted automatically when the timer runs out.
+
+Built as a college project, but aimed at working like a real training product: sign up, launch a lab, practice, get scored.
+
+> **Status:** under active development. Labs, auth and lifecycle management work. Learning content, flags, scoring and progress tracking are still being wired to the backend (see [Roadmap](#roadmap)).
 
 ---
 
-## What we are have done so far --
-The cluster (where everything lives) - Kind, running through Docker Desktop
-Backend -	FastAPI — talks to Kubernetes directly, and also runs helm install / helm uninstall behind the scenes to create/remove labs
-Frontend - 	React + TypeScript + Vite, dark cyberpunk theme
-How each lab is packaged - A Helm chart per lab type — only the Juice Shop one is built so far and working on more labs 
-How traffic reaches a lab - NGINX Ingress, using URLs like studentA.local
-Monitoring - 	Prometheus + Grafana + Alertmanager for metrics, Loki for logs
-CI/CD - A GitHub Actions workflow (meant to run on our own local runner)
-Keeping labs isolated - Kubernetes NetworkPolicies — basically "block everything by default, then allow only what's needed"
- 
+## What's in the project
+
+**Labs**
+
+| Lab | Purpose | State |
+|---|---|---|
+| OWASP Juice Shop | Web app vulnerabilities (injection, broken auth, XSS and more) | Deployable |
+| DVWA | Classic web vulnerabilities at adjustable difficulty | Listed in the UI, not deployable yet |
+| Metasploitable | Network and service exploitation | Listed in the UI, not deployable yet |
+
+**Frontend pages**
+
+- **Landing:** hero, how it works, available labs, sign up / log in
+- **Login / Signup:** account creation and sign in
+- **Dashboard:** overview of progress (sample data for now)
+- **Learn:** short concept pages per lab (sample data for now)
+- **Quiz:** knowledge check before starting a lab (sample data for now)
+- **Practice:** launch a lab, see the countdown, open it, end it (fully working)
+
+**Backend (FastAPI)**
+
+- Auth: signup, login and "who am I" with JWT
+- Lab lifecycle: launch a lab, list your own lab, end it. A user can only see and end their own lab
+- Expiry: a background reaper marks and removes expired labs
+- Database: PostgreSQL via SQLAlchemy. Users and `lab_sessions` (owner, namespace, created, expires, ended, flag)
+
+**Kubernetes side**
+
+- Helm chart per lab (`k8s/juiceshop-lab/`): Deployment, Service, Ingress, NetworkPolicy, readiness/liveness probes
+- One namespace per lab, so every student gets a clean, isolated copy
+- Cleanup CronJob with its own ServiceAccount and RBAC role
+- Backend RBAC so the API can create and delete lab namespaces
+
+**Monitoring**
+
+- Prometheus + Grafana (`kube-prometheus-stack`) for cluster and pod metrics
+- Loki + Promtail for application logs
+
+**Pipeline**
+
+- GitHub Actions on a self-hosted runner (the cluster is local, so cloud runners can't reach it)
+- Skaffold for one-command local build and deploy
 
 ---
 
-## What's working so far
+## What works today
 
-### The core Kubernetes setup
-- Each lab gets its own diff namespace , 
-- Set up "deny everything by default" rules per namespace, then added a separate rule so admins can still get in((Took a bit of trial and error — had to combine two selectors as siblings under the same from block for it to actually work.))
-- Confirmed that Docker Desktop's built-in networking (kindnet) actually respects these isolation rules — it's not just decoration, it really blocks traffic.
-- The Juice Shop Helm chart now creates a brand-new, uniquely named lab every time instead of reusing the same three test namespaces.
+- Sign up / log in (JWT auth)
+- Launch an OWASP Juice Shop lab from the Practice page
+- One active lab per user, with a live countdown and a readiness check
+- Each lab gets its own namespace with a NetworkPolicy, so labs can't reach each other
+- Labs expire on their own (backend reaper + cleanup CronJob)
+- Monitoring stack: Prometheus, Grafana, Loki
+- CI/CD with GitHub Actions on a self-hosted runner
 
-### The backend (FastAPI)
-- Connects to the cluster automatically.
-- Can check if the cluster is healthy.
-- Can list every lab currently running (with pod count, status, port, and type).
-- Can deploy a new lab on request.
-- Can tear a lab down — and it specifically refuses to delete the original `student-a/b/c` test namespaces, so nobody can accidentally nuke them.
-- Set up to only accept requests from the frontend's actual address.
+## What is not done yet
 
-### The frontend (React)
-- Fully connected to the real backend now - few of the data is let to be chnged like default labs 
-- Automatically checks for lab updates every 5 seconds.
-- Deploy and stop buttons both talk to the real backend and actually work.
-- Has four screens: Login, Dashboard, Lab Detail, and Monitoring.
-- Tested live: deploying, deleting, and the "can't delete the test labs" protection all work as expected.
-
-### Fixing the networking (this was a big one)
-**The problem:** Kind doesn't forward traffic the way Minikube does. Every lab gets a random port assigned, and there's no realistic way to pre-open every possible port. So even though labs were deploying fine, clicking "Open App" just timed out.
-
-**The fix:** Switched from random ports to NGINX Ingress, which only needs ports 80 and 443 opened *once*, no matter how many labs exist. Each lab now gets its own address like `studentA.local` instead of a folder-style URL, because Juice Shop expects to load from the root of the site, not a subfolder.
-
-- Confirmed it actually works — loading the app through the tunnel returns a real, fully working page.
-- Found (and diagnosed) a follow-up bug where Juice Shop's styling and scripts weren't loading — this confirmed the "own address per lab" approach was the right call.
-- **Still not done:** the "Open App" button in the frontend still points to the old, broken-style URL. Needs to be updated to use the new address format.
-
-### Monitoring — confirmed alive and running
-Checked directly in the cluster — Prometheus, Grafana, Alertmanager, and Loki (for logs) are all up and running properly.
-
-**Currently investigating:** Grafana is showing two things both claiming to be the "default" data source (Prometheus and Loki are fighting over it). Not fixed yet — currently just looking at what's actually configured in the cluster before changing anything, so nothing breaks by accident. The goal is: Prometheus should be the default for metrics, Loki should still be available but not the default.
-
-### CI/CD — partially working
-- The GitHub Actions pipeline exists and has run twice — once successfully, once not.
-- The GitHub repo is correctly linked.
-- **The problem:** there's no runner installed on this machine to actually execute the pipeline and deploy anything for real — we looked and it's just missing.
-- There's also a decent chunk of work sitting locally that hasn't been pushed to GitHub yet (backend changes, the networking fix files, and the new frontend folder) — waiting until the networking fix is fully confirmed working before committing it.
+- Learn and Quiz screens run on hardcoded data (`frontend/src/data/`)
+- Per-student unique flags, hints, scoring and XP
+- Real data on the dashboard (skills, leaderboard, recommendations)
+- DVWA and Metasploitable labs
+- Grafana/Prometheus data inside the UI
 
 ---
 
-## How to run it locally
-
-You'll need **4 terminal windows open at the same time**:
-
-1. **Frontend**
-   ```
-   npm run dev
-   ```
-   Opens at `http://localhost:8443`
-
-2. **Backend**
-   ```
-   python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
-   ```
-
-3. **Tunnel into the cluster** (this is what lets your browser reach the labs)
-   ```
-   kubectl port-forward -n ingress-nginx svc/ingress-nginx-controller 8080:80
-   ```
-   Opens at `http://localhost:8080`
-
-4. **A free terminal** for any extra `kubectl`, `helm`, or `git` commands
-
-Leave terminals 1–3 running in the background  — don't close them. If terminal 3 keeps printing `Handling connection for 8080`, that's normal, it just means it's working.
-
----
-
-## What's still left to do--
-
-- [ ] Point the "Open App" button at the new address format instead of the old broken one
-- [ ] Fix the Grafana "two default data sources" issue
-- [ ] Get a runner installed so CI/CD can actually deploy things
-- [ ] Push the pending local changes once the networking fix is confirmed solid
-- [ ] Build the DVWA and Metasploitable lab charts (only Juice Shop exists right now)
-- [ ] Stop tracking `backend/__pycache__/main.cpython-314.pyc` in git
-
----
-
-## How a request flows through the system (after the networking fix)
+## How it works
 
 ```
-Your browser
-   |
-   |  goes to http://studentA.local (through the localhost:8080 tunnel)
-   v
-NGINX Ingress (the traffic director)
-   |
-   v
-A private internal service for that specific lab
-   |
-   v
-The actual lab (Juice Shop, etc.) running in its own pod
+Browser ──> NGINX Ingress ──> React frontend
+                         └──> FastAPI backend ──> PostgreSQL
+                                    │
+                                    └──> Kubernetes API ──> Helm chart
+                                                              │
+                                                  one namespace per lab
+                                                  (Juice Shop + NetworkPolicy)
 ```
+
+1. A logged-in student hits `POST /labs/{lab_type}`.
+2. The backend checks they have no active lab, writes a `lab_sessions` row, and installs the Helm chart into a new namespace.
+3. The lab is reachable at `http://<namespace>.127.0.0.1.nip.io:8080` through the ingress.
+4. When `expires_at` passes (or the student ends it), the namespace is removed.
+
+## Tech stack
+
+| Area | Tools |
+|---|---|
+| Frontend | React, TypeScript, Vite, Tailwind 4, react-router-dom |
+| Backend | Python, FastAPI, SQLAlchemy, PostgreSQL |
+| Orchestration | Kubernetes (kind), Helm, Kubernetes Python client |
+| Networking | NGINX Ingress, NetworkPolicies, nip.io |
+| Observability | Prometheus, Grafana, Loki + Promtail |
+| CI/CD | GitHub Actions (self-hosted runner), Skaffold for local deploys |
+
+## Repo layout
+
+```
+backend/          FastAPI app, DB models, lab lifecycle logic
+frontend/         React app
+k8s/
+  juiceshop-lab/  Helm chart for a single lab
+  dashboard/      Manifests for backend, frontend, ingress
+skaffold.yaml     Build + deploy for local development
+kind-config.yaml  kind cluster config (ingress on host port 8080)
+```
+
+---
+
+## Running it locally
+
+Developed on Windows with PowerShell and Docker Desktop. Commands below are for that setup.
+
+**You need:** Docker Desktop (running), `kind`, `kubectl`, `helm`, `skaffold`.
+
+**1. Create the cluster**
+
+```powershell
+kind create cluster --name cyberlabx --config kind-config.yaml
+```
+
+Port 80 is usually taken by Docker Desktop, so the ingress is mapped to **8080**.
+
+**2. Install the ingress controller**
+
+```powershell
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+```
+
+Check that `kubectl config current-context` says `kind-cyberlabx` before applying anything.
+
+**3. Create the secrets**
+
+The backend expects two Secrets in the `default` namespace: `cyberlabx-db` and `cyberlabx-auth`. Create them with your own values. Never commit real credentials.
+
+**4. Build and deploy**
+
+```powershell
+skaffold run
+```
+
+Skaffold builds the backend and frontend images, loads them into kind, and deploys Postgres, backend and frontend.
+
+**5. Open the app**
+
+```
+http://cyberlabx.127.0.0.1.nip.io:8080/
+```
+
+### If something breaks
+
+- Lab unreachable? Check Docker Desktop is actually running first.
+- 502/504 right after launch: Juice Shop is slow to start. Wait for the readiness probe.
+- Always deploy through Skaffold. A manually built `:latest` image will not be the one the pods use.
+
+---
+
+## Monitoring
+
+Prometheus and Grafana come from `kube-prometheus-stack`, logs from `loki-stack`, both in the `monitoring` namespace. In Grafana, add Loki as a data source with the URL `http://loki:3100`.
+
+## Roadmap
+
+| Sprint | Focus | State |
+|---|---|---|
+| 0-7 | Docker, Helm, isolation, CI/CD, monitoring, TTL cleanup, dashboard | Done |
+| 8 | Database, auth, new frontend, labs owned by users | Done |
+| 9 | Audit frontend data, map to backend endpoints | Next |
+| 10 | Learn + Quiz backed by the database | Planned |
+| 11 | Practice: unique flags, hints, scoring | Planned |
+| 12 | Progress: XP, skills, leaderboard, recommendations | Planned |
+| 13 | DVWA lab | Planned |
+
+## Scoring (planned)
+
+Score = lab performance + quiz results, minus penalties for hints used and wrong attempts. Each student gets a unique flag per lab.
+
+## Safety note
+
+The labs contain intentionally vulnerable software. They are isolated by namespace and NetworkPolicy and are meant for a local or controlled environment. Do not expose this setup to the public internet as-is.
+
+## Credits
+
+Vulnerable apps are open-source projects by their respective authors: [OWASP Juice Shop](https://owasp.org/www-project-juice-shop/), [DVWA](https://github.com/digininja/DVWA), Metasploitable. CyberLabX is the platform around them.
+
+## Author
+
+Aryan, [github.com/Aryan160106/CyberLabX](https://github.com/Aryan160106/CyberLabX)

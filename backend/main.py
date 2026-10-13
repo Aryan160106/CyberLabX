@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from db import engine, init_db, get_db, LabSession, User
 from auth import router as auth_router, get_current_user
 from quiz import router as quiz_router
-from missions import router as missions_router
+from missions import router as missions_router, dvwa_flag
 from progress import router as progress_router
 from account import router as account_router
 
@@ -213,6 +213,7 @@ def deploy_lab(
             "--set", f"namespace={namespace}",
             "--set", f"studentId={namespace}",
             "--set-string", f"ctfKey={ctf_key}",
+            "--set-string", f"flag={dvwa_flag(ctf_key)}",
         ],
         capture_output=True,
         text=True,

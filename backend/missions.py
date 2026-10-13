@@ -14,6 +14,7 @@ router = APIRouter()
 # One mission per lab for now. "challenge" must match the challenge name in Juice Shop.
 MISSIONS = {
     "juice-shop": {"id": "js-m1", "challenge": "Score Board", "xp": 50},
+    "dvwa": {"id": "dvwa-m1", "challenge": "Command Injection", "xp": 50},
 }
 
 
@@ -24,6 +25,12 @@ class FlagIn(BaseModel):
 def expected_flag(ctf_key: str, challenge_name: str) -> str:
     """Juice Shop CTF flag: HMAC_SHA1(ctfKey, challenge.name), hex-encoded."""
     return hmac.new(ctf_key.encode(), challenge_name.encode(), hashlib.sha1).hexdigest()
+
+
+def dvwa_flag(ctf_key: str) -> str:
+    """Unique per-launch DVWA flag, planted in /flag.txt inside the lab."""
+    digest = hmac.new(ctf_key.encode(), b"dvwa-cmdi", hashlib.sha256).hexdigest()
+    return "CLX{" + digest[:24] + "}"
 
 
 @router.post("/labs/me/flag")
@@ -43,8 +50,11 @@ def submit_flag(
     if not mission:
         raise HTTPException(status_code=400, detail="This lab has no flag mission yet")
 
-    expected = expected_flag(session.flag, mission["challenge"])
-    correct = hmac.compare_digest(body.flag.strip().lower(), expected)
+    if session.lab_type == "dvwa":
+        expected = dvwa_flag(session.flag)
+    else:
+        expected = expected_flag(session.flag, mission["challenge"])
+    correct = hmac.compare_digest(body.flag.strip().lower(), expected.lower())
     xp_awarded = 0
 
     if correct:

@@ -20,6 +20,12 @@ jobs:
         shell: powershell
         run: helm template ci k8s/juiceshop-lab --set studentId=ci --set namespace=ci --set-string ctfKey=ci
 
+      - name: Helm lint and render (dvwa)
+        shell: powershell
+        run: |
+          helm lint k8s/dvwa-lab
+          helm template ci k8s/dvwa-lab --set studentId=ci --set namespace=ci --set-string flag=ci
+
       - name: Build images (frontend type-check + backend)
         shell: powershell
         run: C:\tools\skaffold.exe build --kube-context kind-cyberlabx

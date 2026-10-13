@@ -11,7 +11,7 @@ router = APIRouter()
 # Flip "available" to True when a lab's chart is built (mirrors frontend labData.ts).
 LABS = {
     "juice-shop": {"name": "OWASP Juice Shop", "category": "Web Security", "available": True},
-    "dvwa": {"name": "DVWA", "category": "Web Security", "available": False},
+    "dvwa": {"name": "DVWA", "category": "Web Security", "available": True},
     "metasploitable": {"name": "Metasploitable", "category": "Network Security", "available": False},
 }
 

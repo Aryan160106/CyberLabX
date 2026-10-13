@@ -41,7 +41,7 @@ export const labs: Lab[] = [
     category: "WEB SECURITY",
     difficulty: "Intermediate",
     duration: "60 min",
-    status: "Coming Soon",
+    status: "Available",
     objectives: [
       "Understand common application vulnerabilities",
       "Practice controlled exploitation",

@@ -1,0 +1,4 @@
+studentId: student-a
+namespace: student-a
+image: vulnerables/web-dvwa:latest
+flag: ""

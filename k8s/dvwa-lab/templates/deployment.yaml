@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dvwa-{{ .Values.studentId }}
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dvwa
+      student: {{ .Values.studentId }}
+  template:
+    metadata:
+      labels:
+        app: dvwa
+        student: {{ .Values.studentId }}
+    spec:
+      containers:
+        - name: dvwa
+          image: {{ .Values.image }}
+          command: ["/bin/sh", "-c", "ulimit -n 1024; exec /main.sh"]
+          env:
+            - name: LAB_FLAG
+              value: {{ .Values.flag | quote }}
+          ports:
+            - containerPort: 80
+          lifecycle:
+            postStart:
+              exec:
+                command: ["/bin/sh", "-c", "echo \"$LAB_FLAG\" > /flag.txt && chmod 644 /flag.txt"]
+          resources:
+            limits:
+              memory: 1536Mi
+          readinessProbe:
+            httpGet:
+              path: /login.php
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 3
+            timeoutSeconds: 2
+            failureThreshold: 20
+          livenessProbe:
+            httpGet:
+              path: /login.php
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6

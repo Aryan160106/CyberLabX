@@ -36,6 +36,7 @@ function PracticeLab() {
   const [now, setNow] = useState(Date.now());
   const [flagInput, setFlagInput] = useState("");
   const [flagBusy, setFlagBusy] = useState(false);
+  const [hintsShown, setHintsShown] = useState(0);
   const [flagMsg, setFlagMsg] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -192,11 +193,10 @@ function PracticeLab() {
           <div className="mission-section">
             <span className="card-label">CURRENT MISSION</span>
 
-            <h2>Identify the vulnerable functionality</h2>
+            <h2>{lab.mission?.title ?? "Identify the vulnerable functionality"}</h2>
 
             <p>
-              Investigate the application and identify a security weakness
-              related to the current mission.
+              {lab.mission?.description ?? "Investigate the application and identify a security weakness related to the current mission."}
             </p>
           </div>
 
@@ -235,8 +235,21 @@ function PracticeLab() {
               <CircleHelp size={15} />
             </div>
 
-            <button className="hint-button" type="button">
-              Reveal Hint 01
+            {(lab.mission?.hints ?? []).slice(0, hintsShown).map((h, i) => (
+              <p key={i} className="hint-text">
+                <strong>Hint {i + 1}:</strong> {h}
+              </p>
+            ))}
+
+            <button
+              className="hint-button"
+              type="button"
+              disabled={hintsShown >= (lab.mission?.hints?.length ?? 0)}
+              onClick={() => setHintsShown((n) => n + 1)}
+            >
+              {hintsShown >= (lab.mission?.hints?.length ?? 0)
+                ? "No more hints"
+                : `Reveal Hint ${String(hintsShown + 1).padStart(2, "0")}`}
             </button>
           </div>
 

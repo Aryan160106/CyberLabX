@@ -171,8 +171,7 @@ function Settings() {
         <details>
           <summary>Where do I find the flag?</summary>
           <p>
-            Solve the mission inside your lab. The lab shows a flag code when
-            the challenge is completed; paste it into Mission Flag.
+            Each lab's mission says where to look. In Juice Shop the lab shows a flag code when the challenge is completed; in DVWA the flag is stored in a file on the server. Paste it into Mission Flag.
           </p>
         </details>
         <p>

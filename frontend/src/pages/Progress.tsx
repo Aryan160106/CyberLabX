@@ -10,6 +10,14 @@ import { useNavigate } from "react-router-dom";
 import { fetchProgress } from "../api";
 import type { ProgressData } from "../api";
 
+const MISSION_TARGET = 30;
+
+const MISSION_TOTALS: Record<string, string> = {
+  "OWASP Juice Shop": "100+",
+  DVWA: "19",
+  bWAPP: "100+",
+};
+
 function Progress() {
   const navigate = useNavigate();
   const [data, setData] = useState<ProgressData | null>(null);
@@ -68,6 +76,47 @@ function Progress() {
           </div>
         </section>
       )}
+
+      <section className="progress-panel" style={{ marginBottom: 24 }}>
+        <div className="panel-heading">
+          <div>
+            <span className="card-label">ALL LABS</span>
+            <h2>Lab Progress</h2>
+          </div>
+          <Target size={20} />
+        </div>
+
+        {data?.labs.map((lab) => {
+          const solved = lab.stages.some((s) => s.label === "Evaluate" && s.done) ? 1 : 0;
+          return (
+            <div key={lab.name} style={{ padding: "14px 0", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <strong>{lab.name}</strong>
+                <span style={{ fontSize: 12, opacity: 0.7 }}>
+                  {lab.stages.map((s) => s.label + ": " + (s.done ? "done" : "pending")).join(" | ")}
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8 }}>
+                <div style={{ flex: 1, height: 8, background: "rgba(255,255,255,0.1)", borderRadius: 4, overflow: "hidden" }}>
+                  <div style={{ width: lab.progress + "%", height: "100%", background: "#b6f23a", transition: "width 0.4s" }} />
+                </div>
+                <strong style={{ minWidth: 44, textAlign: "right" }}>{lab.progress}%</strong>
+              </div>
+              <div style={{ marginTop: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, opacity: 0.8 }}>
+                  <span>
+                    Missions: {solved} / {MISSION_TARGET} (1 live, more coming) | Full app: {MISSION_TOTALS[lab.name] ?? "more"} challenges
+                  </span>
+                  <span>{Math.round((100 * solved) / MISSION_TARGET)}%</span>
+                </div>
+                <div style={{ height: 6, marginTop: 6, background: "rgba(255,255,255,0.1)", borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{ width: Math.round((100 * solved) / MISSION_TARGET) + "%", height: "100%", background: "#4cc9f0", transition: "width 0.4s" }} />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </section>
 
       <div className="progress-grid">
         <section className="progress-panel">

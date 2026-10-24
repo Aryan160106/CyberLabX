@@ -15,6 +15,7 @@ router = APIRouter()
 MISSIONS = {
     "juice-shop": {"id": "js-m1", "challenge": "Score Board", "xp": 50},
     "dvwa": {"id": "dvwa-m1", "challenge": "Command Injection", "xp": 50},
+    "bwapp": {"id": "bwapp-m1", "challenge": "OS Command Injection", "xp": 50},
 }
 
 
@@ -30,6 +31,18 @@ def expected_flag(ctf_key: str, challenge_name: str) -> str:
 def dvwa_flag(ctf_key: str) -> str:
     """Unique per-launch DVWA flag, planted in /flag.txt inside the lab."""
     digest = hmac.new(ctf_key.encode(), b"dvwa-cmdi", hashlib.sha256).hexdigest()
+    return "CLX{" + digest[:24] + "}"
+
+
+# Labs whose flag is planted in /flag.txt at launch (salt keeps each lab's flag distinct).
+PLANTED_SALTS = {"dvwa": b"dvwa-cmdi", "bwapp": b"bwapp-cmdi"}
+
+
+def planted_flag(lab_type: str, ctf_key: str) -> str:
+    salt = PLANTED_SALTS.get(lab_type)
+    if salt is None:
+        return ""
+    digest = hmac.new(ctf_key.encode(), salt, hashlib.sha256).hexdigest()
     return "CLX{" + digest[:24] + "}"
 
 
@@ -50,8 +63,8 @@ def submit_flag(
     if not mission:
         raise HTTPException(status_code=400, detail="This lab has no flag mission yet")
 
-    if session.lab_type == "dvwa":
-        expected = dvwa_flag(session.flag)
+    if session.lab_type in PLANTED_SALTS:
+        expected = planted_flag(session.lab_type, session.flag)
     else:
         expected = expected_flag(session.flag, mission["challenge"])
     correct = hmac.compare_digest(body.flag.strip().lower(), expected.lower())
